@@ -9,9 +9,10 @@ import tensorflow as tf
 Layers = namedtuple('Layers', ('input_size', 'hidden_size', 'latent_size'))
 # input -> intermediate -> latent
 # (and symmetrically back out again)
-LAYERS = Layers(100, 50, 20)
+ARCHITECTURE = Layers(100, 50, 20)
 
-class Model():
+class VAE():
+    """Variational Autoencoder"""
 
     DEFAULTS = {
         'batch_size': 100,
@@ -19,17 +20,17 @@ class Model():
         'learning_rate': 0.05
     }
 
-    def __init__(self, layers=LAYERS, d_hyperparams={}):
+    def __init__(self, architecture=ARCHITECTURE, d_hyperparams={}):
 
-        self.layers = layers
+        self.architecture = architecture
 
-        self.hyperparams = Model.DEFAULTS.copy()
+        self.hyperparams = VAE.DEFAULTS.copy()
         self.hyperparams.update(**d_hyperparams)
 
-        (self.x_in, self.latent_in, self.latent_assign, self.x_decoded_mean,
+        (self.x_in, self.latent_in, self.assign_op, self.x_decoded_mean,
          self.cost, self.train_op) = self._buildGraph()
 
-    def _buildGraph():
+    def _buildGraph(self):
 
         def wbVars(nodes_in, nodes_out):
             """Helper to initialize weights and biases"""
@@ -42,76 +43,98 @@ class Model():
             return (tf.Variable(initial_w, trainable=True, name='weights'),
                     tf.Variable(initial_b, trainable=True, name='biases'))
 
-        def denseLayer(tensor_in, size, scope='dense', nonlinearity=None):
-            """Densely connected layer"""
+        def denseLayer(tensor_in, size, scope='dense', nonlinearity=tf.identity):
+            """Densely connected layer, with given nonlinearity (default: none)"""
             _, m = tensor_in.get_shape()
             with tf.name_scope(scope):
                 w, b = wbVars(m, size)
                 return nonlinearity(tf.matmul(tensor_in, w) + b)
 
-        def dense(size, scope, nonlinearity):
-            """Currying to appy given dense layer to any input tensor"""
+        def dense(size, scope, nonlinearity=tf.identity):
+            """Dense layer currying, e.g. to appy specified layer to any input tensor"""
             return functools.partial(denseLayer(size=size, scope=scope,
                                                 nonlinearity=nonlinearity))
 
-        def sample(mu, sigma, scope='sampling'):
-            n, m = mu.get_shape()
-            with tf.name_scope(scope):
-                epsilon = tf.random_normal([n, m], mean=0, stddev=self.epsilon_std)
-                return mu + epsilon * tf.exp(z_log_sigma)
-
-        x_in = tf.placeholder(tf.float32, shape=[None, # enables variable batch size
-                                                 self.layers[0]], name='x')
+        x_in = tf.placeholder(tf.float32, name='x',
+                              # None dim enables variable batch size
+                              shape=[None, self.architecture.input_size])
         # encoding
-        h = dense(self.layers[1], 'encoding', tf.nn.relu)(x_in)
+        h = dense(self.architecture.hidden_size, 'encoding', tf.nn.relu)(x_in)
 
         # latent space
-        z_mean = dense(self.layers[2], 'z_mean')(h)
-        z_log_sigma = dense(self.layers.latent, 'z_log_sigma')(h)
-        z = sample(z_mean, z_log_sigma, 'latent_sampling')
+        z_mean = dense(self.architecture.latent_size, 'z_mean')(h)
+        z_log_sigma = dense(self.architecture.latent_size, 'z_log_sigma')(h)
+        z = VAE.sampleGaussian(z_mean, z_log_sigma, 'latent_sampling')
 
         # nodes to take points on latent manifold and generate reconstructed outputs
-        latent_in = tf.placeholder(tf.float32, shape=[None, # enables variable batch size
-                                                      self.latent_dims], name='latent_in')
-        latent_assign = tf.assign(z, latent_in)
+        latent_in = tf.placeholder(tf.float32, name="latent_in",
+                                   shape=[None, self.architecture.latent_size])
+        assign_op = tf.assign(z, latent_in)
 
         # decoding
-        h_decoded = dense(self.hyperparamsintermediate_dims, 'h_decoder', tf.nn.relu)(z)
-        x_decoded_mean = dense(self.input_dims, 'x_decoder', tf.nn.sigmoid)(h_decoded)
+        h_decoded = dense(self.architecture.hidden_size, 'h_decoder', tf.nn.relu)(z)
+        x_decoded_mean = dense(self.architecture.input_size, 'x_decoder', tf.sigmoid)(h_decoded)
 
         # training ops
         with tf.name_scope('cost'):
-            cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(x_decoded_mean)
-            kl_loss = -0.5 * tf.reduce_mean(1 + z_log_sigma - tf.square(z_mean) - tf.exp(z_log_sigma), reduction_indices=1, name='KL_divergence')
+            #     #cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(x_decoded_mean, x_in)
+            # with tf.name_scope('kullback_leibler_divergence'):
+            #     kl_loss = -0.5 * tf.reduce_mean(1 + z_log_sigma - tf.square(z_mean)
+            #                                     - tf.exp(z_log_sigma), reduction_indices=1)
+            # cost = cross_entropy + kl_loss
+            cross_entropy = VAE.crossEntropy(x_decoded_mean, x_in)
+            kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
             cost = cross_entropy + kl_loss
 
-        train_op = tf.train.AdamOptimizer(self.hyperparams['learning_rate'])\
-                                          .minimize(cost)
+        train_op = (tf.train.AdamOptimizer(self.hyperparams['learning_rate'])
+                            .minimize(cost))
 
         return (x_in, latent_in, latent_assign, x_decoded_mean, cost, train_op)
 
-    def encoder(x):
-        # encoder from inputs to latent space
+    @staticmethod
+    def sampleGaussian(mu, log_sigma, scope='sampling'):
+        """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
+        n, m = mu.get_shape()
+        with tf.name_scope(scope):
+            epsilon = tf.random_normal([n, m], mean=0, stddev=
+                                       self.hyperparams['epsilon_std'])
+            return mu + epsilon * tf.exp(log_sigma)
+
+    @staticmethod
+    def crossEntropy(observed, actual):
+        with tf.name_scope('cross_entropy'):
+            # bound obs by clipping to avoid NaN
+            return -tf.reduce_mean(actual * tf.log(tf.clip_by_value(
+                observed, 1e-12, 1.0)), reduction_indices=1)
+
+    @staticmethod
+    def kullbackLeibler(mu, log_sigma):
+        with tf.name_scope('kullback_leibler_divergence'):
+            return -0.5 * tf.reduce_mean(1 + log_sigma - tf.square(mu)
+                                         - tf.exp(log_sigma), reduction_indices=1)
+
+    def encoder(self, x):
+        """Encoder from inputs to latent space"""
         with tf.Session() as sesh:
             out = tf.run(self.z_mean, {self.x_in: x})
         return out
 
-    def decoder(latent_pt):
-        # generator from latent space to reconstructed inputs
+    def decoder(self, latent_pt):
+        """Generator from latent space to reconstructed inputs"""
         with tf.Session() as sesh:
-            _, generator = tf.run([self.latent_assign, self.x_decoded_mean],
+            _, generator = tf.run([self.assign_op, self.x_decoded_mean],
                                   {self.latent_in: latent_pt})
         return generator
 
-    def vae(x, train=False):
-        # end-to-end autoencoder
+    def vae(self, x, train=False):
+        """End-to-end autoencoder"""
         to_compute = ([self.x_decoded_mean, self.cost, self.train_op] if train
                       else [self.x_decoded_mean])
         with tf.Session() as sesh:
             out = tf.run(to_compute, {self.x_in: x})
         return out
 
-    def train(x, verbose=True):
+    def train(self, x, verbose=True):
         i = 0
         while True:
             x_decoded, cost, _ = self.vae(x, train=True)
