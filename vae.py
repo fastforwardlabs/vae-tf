@@ -1,24 +1,26 @@
-from __future__ import division
-from collections import namedtuple
-from functools import partial
-
 import numpy as np
 import tensorflow as tf
 
 
-# Layers = namedtuple("Layers", ("input_size", "hidden_size", "latent_size"))
-#ARCHITECTURE = Layers(100, 50, 20)
-# input -> intermediate/s -> latent
+ARCHITECTURE = [784, # MNIST = 28*28
+                128,
+                #500, 500, # intermediate encoding
+                2] # latent space dims
 # (and symmetrically back out again)
-ARCHITECTURE = [100, 50, 20]
+
+
+#@ops.RegisterGradient("PlaceholderWithDefault")
+#def _PlaceholderWithDefault(op, grad):
+    #default = op.inputs[0]
+    #tf.gradients()
 
 class VAE():
     """Variational Autoencoder"""
 
     DEFAULTS = {
         "batch_size": 100,
-        "epsilon_std": 0.1,
-        "learning_rate": 0.05
+        "epsilon_std": 0.0001,
+        "learning_rate": 0.01
     }
 
     def __init__(self, architecture=ARCHITECTURE, d_hyperparams={}):
@@ -44,28 +46,24 @@ class VAE():
             return (tf.Variable(initial_w, trainable=True, name="weights"),
                     tf.Variable(initial_b, trainable=True, name="biases"))
 
-        def denseLayer(tensor_in, size, scope="dense", nonlinearity=tf.identity):
-            """Densely connected layer, with given nonlinearity (default: none)"""
-            _, m = tensor_in.get_shape()
-            with tf.name_scope(scope):
-                w, b = wbVars(m, size)
-                return nonlinearity(tf.matmul(tensor_in, w) + b)
+        def dense(scope="dense_layer", size=None, nonlinearity=tf.identity):
+            """Dense layer currying - i.e. to appy specified layer to any input tensor"""
+            assert size, "Must specify layer size (num nodes)"
+            def _dense(tensor_in):
+                with tf.name_scope(scope):
+                    w, b = wbVars(tensor_in.get_shape()[1].value, size)
+                    return nonlinearity(tf.matmul(tensor_in, w) + b)
+            return _dense
 
-        def dense(size, scope, nonlinearity=tf.identity):
-            """Dense layer currying, e.g. to appy specified layer to any input tensor"""
-            return functools.partial(denseLayer(size=size, scope=scope,
-                                                nonlinearity=nonlinearity))
-
-        x_in = tf.placeholder(tf.float32, name="x",
-                              # None dim enables variable batch size
-                              shape=[None, self.architecture[0]])
-        xs = [x_in]
-
+        x_in = tf.placeholder(tf.float32, shape=[None, # enables variable batch size
+                                                 self.architecture[0]], name="x")
         # encoding
+        xs = [x_in]
         for hidden_size in self.architecture[1:-1]:
-            h = dense(hidden_size, "encoding", tf.nn.relu)(xs[-1])
+            h = dense("encoding", hidden_size, tf.nn.relu)(xs[-1])
             xs.append(h)
-        h_encoded = tf.identity(xs[-1], name="h_encoded")
+        #h_encoded = tf.identity(xs[-1], name="h_encoded")
+        h_encoded = xs[-1]
 
         # latent space based on encoded output
         z_mean = dense(self.architecture[-1], "z_mean")(h_encoded)
@@ -106,10 +104,10 @@ class VAE():
     @staticmethod
     def sampleGaussian(mu, log_sigma, scope="sampling"):
         """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
-        n, m = mu.get_shape()
-        with tf.name_scope(scope):
-            epsilon = tf.random_normal([n, m], mean=0, stddev=
-                                       self.hyperparams["epsilon_std"])
+        with tf.name_scope("sample_gaussian"):
+            epsilon = tf.random_normal(tf.shape(mu), mean=0, stddev=
+                                       self.hyperparams['epsilon_std'],
+                                       name="epsilon")
             return mu + epsilon * tf.exp(log_sigma)
 
     @staticmethod
