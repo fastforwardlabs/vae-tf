@@ -31,8 +31,12 @@ class VAE():
         self.hyperparams = VAE.DEFAULTS.copy()
         self.hyperparams.update(**d_hyperparams)
 
-        (self.x_in, self.latent_in, self.assign_op, self.x_decoded_mean,
-         self.cost, self.train_op) = self._buildGraph()
+        (self.x_in, self.z_mean, self.latent_in, self.z_assign,
+         self.x_decoded_mean, self.cost, self.train_op) = self._buildGraph()
+
+        self.sesh = tf.Session()
+        self.sesh.run(tf.initialize_all_variables())
+
         if save_graph_def:
             logger = tf.train.SummaryWriter('.', self.sesh.graph)
             logger.flush()
@@ -87,43 +91,60 @@ class VAE():
         h_encoded = xs[-1]
 
         # latent space based on encoded output
-        z_mean = dense(self.architecture[-1], "z_mean")(h_encoded)
-        z_log_sigma = dense(self.architecture[-1], "z_log_sigma")(h_encoded)
-        z = VAE.sampleGaussian(z_mean, z_log_sigma, "latent_sampling")
+        z_mean = dense("z_mean", self.architecture[-1])(h_encoded)
+        z_log_sigma = dense("z_log_sigma", self.architecture[-1])(h_encoded)
+        z = self.sampleGaussian(z_mean, z_log_sigma)
 
-        # nodes to take points on latent manifold and generate reconstructed outputs
-        latent_in = tf.placeholder(tf.float32, name="latent_in",
-                                   shape=[None, self.architecture[-1]])
-        assign_op = tf.assign(z, latent_in)
+        #z = tf.placeholder_with_default(self.sampleGaussian(z_mean, z_log_sigma),
+                                        #[None, self.architecture[-1]])
+        #z = tf.Variable(tf.zeros([47, self.architecture[-1]]),
+                        #trainable=False) # dummy init to make z assignable
+        ## latent sampling
+        #with tf.name_scope("latent_sampling"):
+            #z = tf.assign(z, self.sampleGaussian(z_mean, z_log_sigma), validate_shape=False)
+        ## direct exploration of latent manifold to generate reconstructed outputs
+        #with tf.name_scope("latent_feed"):
+            #z_in = tf.placeholder(tf.float32, name="z_in",
+                                    #shape=[None, self.architecture[-1]])
+            #z_ = tf.assign(z, latent_in)
 
         # decoding
         hs = [z]
         # iterate backwards through symmetric hidden architecture
-        for hidden_size in self.architecture[1:-1:-1]:
-            h = dense(hidden_size, "decoding", tf.nn.relu)(hs[-1])
+        for hidden_size in reversed(self.architecture[1:-1]): # aka [-2:0:-1]
+            h = dense("decoding", hidden_size, tf.nn.relu)(hs[-1])
             hs.append(h)
-        #h_decoded = dense(self.architecture.hidden_size, "h_decoder", tf.nn.relu)(z)
-        h_decoded = tf.identity(hs[-1], name="h_decoded")
-        x_decoded_mean = dense(self.architecture[0], "x_decoded", tf.sigmoid)(h_decoded)
+        h_decoded = hs[-1]
+        #h_decoded = tf.identity(hs[-1], name="h_decoded")
 
-        # training ops
-        with tf.name_scope("cost"):
-            #     #cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(x_decoded_mean, x_in)
-            # with tf.name_scope("kullback_leibler_divergence"):
-            #     kl_loss = -0.5 * tf.reduce_mean(1 + z_log_sigma - tf.square(z_mean)
-            #                                     - tf.exp(z_log_sigma), reduction_indices=1)
-            # cost = cross_entropy + kl_loss
-            cross_entropy = VAE.crossEntropy(x_decoded_mean, x_in)
-            kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
-            cost = cross_entropy + kl_loss
+        # reconstructed output
+        x_decoded_mean = tf.identity(
+            dense("x_decoding", self.architecture[0], tf.sigmoid)(h_decoded),
+            name = "x_reconstructed")
 
-        train_op = (tf.train.AdamOptimizer(self.hyperparams["learning_rate"])
-                            .minimize(cost))
+        # loss
+        cross_entropy = VAE.crossEntropy(x_decoded_mean, x_in) # reconstruction loss
+        kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma) # mismatch b/w learned latent dist and prior
+        cost = tf.add(cross_entropy, kl_loss, name="cost")
 
-        return (x_in, latent_in, latent_assign, x_decoded_mean, cost, train_op)
+        # optimization
+        with tf.name_scope("Adam_optimizer"):
+            optimizer = tf.train.AdamOptimizer(self.hyperparams["learning_rate"])
+            tvars = tf.trainable_variables()
+            #grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars), 5)
+            #train_op = optimizer.apply_gradients(zip(grads, tvars))
+            grads_and_vars = optimizer.compute_gradients(cost, tvars)
+            #global_norm = tf.global_norm(tvars)
+            clipped = [(tf.clip_by_value(grad, -1, 1), tvar) # gradient clipping
+                    for grad, tvar in grads_and_vars]
+            train_op = optimizer.apply_gradients(clipped, name="minimize_cost")
+            #train_op = (tf.train.AdamOptimizer(self.hyperparams["learning_rate"])
+                                #.minimize(cost))
 
-    @staticmethod
-    def sampleGaussian(mu, log_sigma, scope="sampling"):
+        latent_in, z_assign = 47, 47
+        return (x_in, z_mean, latent_in, z_assign, x_decoded_mean, cost, train_op)
+
+    def sampleGaussian(self, mu, log_sigma):
         """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
         with tf.name_scope("sample_gaussian"):
             epsilon = tf.random_normal(tf.shape(mu), mean=0, stddev=
@@ -136,33 +157,34 @@ class VAE():
         with tf.name_scope("cross_entropy"):
             # bound obs by clipping to avoid NaN
             return -tf.reduce_mean(actual * tf.log(tf.clip_by_value(
-                observed, 1e-12, 1.0)), reduction_indices=1)
+                observed, 1e-10, 1.0)))
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
-        with tf.name_scope("kullback_leibler_divergence"):
-            return -0.5 * tf.reduce_mean(1 + log_sigma - tf.square(mu)
-                                         - tf.exp(log_sigma), reduction_indices=1)
+        with tf.name_scope("KL_divergence"):
+            return -0.5 * tf.reduce_mean(1 + log_sigma - mu**2 - tf.exp(log_sigma))
 
-    def encoder(self, x):
+    def encode(self, x):
         """Encoder from inputs to latent space"""
-        with tf.Session() as sesh:
-            out = tf.run(self.z_mean, {self.x_in: x})
-        return out
+        encoded = self.sesh.run(self.z_mean, feed_dict={self.x_in: x})
+        return encoded
 
-    def decoder(self, latent_pt):
-        """Generator from latent space to reconstructed inputs"""
-        with tf.Session() as sesh:
-            _, generator = tf.run([self.assign_op, self.x_decoded_mean],
-                                  {self.latent_in: latent_pt})
-        return generator
+    # def decode(self, latent_pt):
+    #     """Generator from latent space to reconstructed inputs"""
+    #     #with tf.Session() as sesh:
+    #         #sesh.run(tf.initialize_all_variables())
+    #         #_, generator = sesh.run([self.assign_op, self.x_decoded_mean],
+    #                                 #feed_dict={self.latent_in: latent_pt})
+    #     #return generator
+    #     _, generator = self.sesh.run([self.z_assign, self.x_decoded_mean],
+    #                                  feed_dict={self.latent_in: latent_pt})
+    #     return generator
 
     def vae(self, x, train=False):
         """End-to-end autoencoder"""
-        to_compute = ([self.x_decoded_mean, self.cost, self.train_op] if train
-                      else [self.x_decoded_mean])
-        with tf.Session() as sesh:
-            out = tf.run(to_compute, {self.x_in: x})
+        fetches = ([self.x_decoded_mean, self.cost, self.train_op] if train
+                   else [self.x_decoded_mean])
+        out = self.sesh.run(fetches, feed_dict={self.x_in: x})
         return out
 
     def train(self, x, verbose=True):
