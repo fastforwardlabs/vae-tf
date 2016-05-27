@@ -23,7 +23,8 @@ class VAE():
         "learning_rate": 0.01
     }
 
-    def __init__(self, architecture=ARCHITECTURE, d_hyperparams={}):
+    def __init__(self, architecture=ARCHITECTURE, d_hyperparams={},
+                 save_graph_def=True):
 
         self.architecture = architecture
 
@@ -32,6 +33,10 @@ class VAE():
 
         (self.x_in, self.latent_in, self.assign_op, self.x_decoded_mean,
          self.cost, self.train_op) = self._buildGraph()
+        if save_graph_def:
+            logger = tf.train.SummaryWriter('.', self.sesh.graph)
+            logger.flush()
+            logger.close()
 
     def _buildGraph(self):
 
@@ -42,6 +47,16 @@ class VAE():
                                             stddev = nodes_in**-0.5,
                                             name="truncated_normal")
             initial_b = tf.random_normal([nodes_out], name="random_normal")
+        def print_(var, name, first_n = 3, summarize = 5):
+            """Util for debugging by printing values during training"""
+            # tf.Print is identity fn with side effect of printing requested [vals]
+            try:
+                return tf.Print(var, [var], '{}: '.format(name), first_n=first_n,
+                                summarize=summarize)
+            except(TypeError):
+                return tf.Print(var, var, '{}: '.format(name), first_n=first_n,
+                                summarize=summarize)
+
 
             return (tf.Variable(initial_w, trainable=True, name="weights"),
                     tf.Variable(initial_b, trainable=True, name="biases"))
