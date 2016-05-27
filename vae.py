@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
@@ -187,15 +188,45 @@ class VAE():
         out = self.sesh.run(fetches, feed_dict={self.x_in: x})
         return out
 
-    def train(self, x, verbose=True):
+    def train(self, X, verbose=True):
         i = 0
         while True:
-            x_decoded, cost, _ = self.vae(x, train=True)
-            i += 1
+            try:
+                x, labels = X.train.next_batch(self.hyperparams['batch_size'])
+                x_reconstructed, cost, _ = self.vae(x, train=True)
+                i += 1
 
-            if i%10 == 0 and verbose:
-                print "x_in: ", x
-                print "x_decoded: ", x_decoded
+                # if i%100 == 0 and verbose:
+                #     print("x_in: ", x)
+                #     print("x_reconstructed: ", x_reconstructed)
 
-            if i%100 == 0 and verbose:
-                print "cost: ", cost
+                if i%100 == 0 and verbose:
+                    print("cost: ", cost)
+
+                if i%1000 == 0 and verbose:
+                    across = int(np.sqrt(self.hyperparams["batch_size"]))
+                    down = across
+                    #down = int(self.hyperparams["batch_size"] / across) + self.hyperparams["batch_size"] % across
+                    dims = [int(inputs * self.architecture[0]**0.5) for inputs in (across, down)]
+                    plt.subplot(211)
+                    plt.imshow(x.reshape(dims), cmap='Greys')
+                    plt.subplot(212)
+                    plt.imshow(x_reconstructed.reshape(dims), cmap='Greys')
+                    plt.savefig('blkwht_{}.png'.format(i))
+                    from IPython import embed; embed()
+                    plt.show()
+
+            except(KeyboardInterrupt):
+                plt.show()
+
+
+def test_mnist():
+    import input_data
+    mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
+    #imgs, labels = mnist.train.next_batch(100)
+
+    vae = VAE()
+    vae.train(mnist)
+
+if __name__ == "__main__":
+    test_mnist()
