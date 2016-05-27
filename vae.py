@@ -40,13 +40,6 @@ class VAE():
 
     def _buildGraph(self):
 
-        def wbVars(nodes_in, nodes_out):
-            """Helper to initialize weights and biases"""
-            initial_w = tf.truncated_normal([nodes_in, nodes_out],
-                                            #stddev = (2/nodes_in)**0.5)
-                                            stddev = nodes_in**-0.5,
-                                            name="truncated_normal")
-            initial_b = tf.random_normal([nodes_out], name="random_normal")
         def print_(var, name, first_n = 3, summarize = 5):
             """Util for debugging by printing values during training"""
             # tf.Print is identity fn with side effect of printing requested [vals]
@@ -57,6 +50,19 @@ class VAE():
                 return tf.Print(var, var, '{}: '.format(name), first_n=first_n,
                                 summarize=summarize)
 
+        def wbVars(fan_in: int, fan_out: int, normal=True):
+            """Helper to initialize weights and biases, via He's adaptation
+            of Xavier init for ReLUs: https://arxiv.org/pdf/1502.01852v1.pdf
+            (distribution defaults to truncated Normal; else Uniform)
+            """
+            stddev = tf.cast((2 / fan_in)**0.5, tf.float32)
+
+            initial_w = (
+                tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal#,
+                                    #name="xavier_truncated_normal") if normal
+                else tf.random_uniform([fan_in, fan_out], -stddev, stddev))#, # (range therefore not truly stddev)
+                                       #name="xavier_uniform"))
+            initial_b = tf.zeros([fan_out])#, name="zeros")
 
             return (tf.Variable(initial_w, trainable=True, name="weights"),
                     tf.Variable(initial_b, trainable=True, name="biases"))
