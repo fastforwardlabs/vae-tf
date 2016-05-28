@@ -158,11 +158,12 @@ class VAE():
             return mu + epsilon * tf.exp(log_sigma)
 
     @staticmethod
-    def crossEntropy(observed, actual):
-        with tf.name_scope("cross_entropy"):
+    def crossEntropy(observed, actual, offset = 1e-10):
+        with tf.name_scope("binary_cross_entropy"):
             # bound obs by clipping to avoid NaN
-            return -tf.reduce_mean(actual * tf.log(tf.clip_by_value(
-                observed, 1e-10, 1.0)))
+            obs = tf.clip_by_value(observed, offset, 1 - offset)
+            return -tf.reduce_mean(actual * tf.log(obs) +
+                                   (1 - actual) * tf.log(1 - obs))
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
