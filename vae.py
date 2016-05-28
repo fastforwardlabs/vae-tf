@@ -209,17 +209,37 @@ class VAE():
                     print("cost: ", cost)
 
                 if i%1000 == 0 and verbose:
-                    across = int(np.sqrt(self.hyperparams["batch_size"]))
-                    down = across
-                    #down = int(self.hyperparams["batch_size"] / across) + self.hyperparams["batch_size"] % across
-                    dims = [int(inputs * self.architecture[0]**0.5) for inputs in (across, down)]
-                    plt.subplot(211)
-                    plt.imshow(x.reshape(dims), cmap='Greys')
-                    plt.subplot(212)
-                    plt.imshow(x_reconstructed.reshape(dims), cmap='Greys')
+                    n = 10
+                    dim = int(self.architecture[0]**0.5)
+                    #from IPython import embed; embed()
+                    plt.figure(figsize = (20, 4))
+                    for idx in range(1, n):
+                        # display original
+                        ax = plt.subplot(2, n, idx)
+                        plt.imshow(x[idx].reshape([dim, dim]), cmap="Greys")
+                        ax.get_xaxis().set_visible(False)
+                        ax.get_yaxis().set_visible(False)
+
+                        # display reconstruction
+                        ax = plt.subplot(2, n, idx + n)
+                        plt.imshow(x_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
+                        ax.get_xaxis().set_visible(False)
+                        ax.get_yaxis().set_visible(False)
+
                     plt.savefig('blkwht_{}.png'.format(i))
-                    from IPython import embed; embed()
                     plt.show()
+
+                    #across = int(np.sqrt(self.hyperparams["batch_size"]))
+                    #down = across
+                    ##down = int(self.hyperparams["batch_size"] / across) + self.hyperparams["batch_size"] % across
+                    #dims = [int(inputs * self.architecture[0]**0.5) for inputs in (across, down)]
+                    #plt.subplot(211)
+                    #plt.imshow(x.reshape(dims), cmap='Greys')
+                    #plt.subplot(212)
+                    #plt.imshow(x_reconstructed.reshape(dims), cmap='Greys')
+                    #plt.savefig('blkwht_{}.png'.format(i))
+                    #from IPython import embed; embed()
+                    #plt.show()
 
             except(KeyboardInterrupt):
                 plt.show()
