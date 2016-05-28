@@ -20,8 +20,8 @@ class VAE():
 
     DEFAULTS = {
         "batch_size": 100,
-        "epsilon_std": 0.0001,
-        "learning_rate": 0.01
+        "epsilon_std": 0.001,
+        "learning_rate": 0.002
     }
 
     def __init__(self, architecture=ARCHITECTURE, d_hyperparams={},
@@ -87,6 +87,7 @@ class VAE():
         xs = [x_in]
         for hidden_size in self.architecture[1:-1]:
             h = dense("encoding", hidden_size, tf.nn.relu)(xs[-1])
+            h = print_(h, "h")
             xs.append(h)
         #h_encoded = tf.identity(xs[-1], name="h_encoded")
         h_encoded = xs[-1]
@@ -95,6 +96,7 @@ class VAE():
         z_mean = dense("z_mean", self.architecture[-1])(h_encoded)
         z_log_sigma = dense("z_log_sigma", self.architecture[-1])(h_encoded)
         z = self.sampleGaussian(z_mean, z_log_sigma)
+        z = print_(z, "z")
 
         #z = tf.placeholder_with_default(self.sampleGaussian(z_mean, z_log_sigma),
                                         #[None, self.architecture[-1]])
@@ -125,7 +127,9 @@ class VAE():
 
         # loss
         cross_entropy = VAE.crossEntropy(x_decoded_mean, x_in) # reconstruction loss
+        cross_entropy = print_(cross_entropy, "ce")
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma) # mismatch b/w learned latent dist and prior
+        kl_loss = print_(kl_loss, "kl")
         cost = tf.add(cross_entropy, kl_loss, name="cost")
 
         # optimization
