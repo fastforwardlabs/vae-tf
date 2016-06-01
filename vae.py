@@ -1,3 +1,7 @@
+import functools
+import sys
+
+from functional import compose, partial
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -10,6 +14,59 @@ ARCHITECTURE = [784, # MNIST = 28*28
                 2] # latent space dims
 # (and symmetrically back out again)
 
+def composeAll(*args):
+    """Util for multiple function composition"""
+    # adapted from https://docs.python.org/3.1/howto/functional.html
+    return partial(functools.reduce, compose)(*args)
+
+def print_(var, name: str, first_n = 10, summarize = 5):
+    """Util for debugging by printing values during training"""
+    # tf.Print is identity fn with side effect of printing requested [vals]
+    try:
+        return tf.Print(var, [var], '{}: '.format(name), first_n=first_n,
+                        summarize=summarize)
+    except(TypeError):
+        return tf.Print(var, var, '{}: '.format(name), first_n=first_n,
+                        summarize=summarize)
+
+class Layer():
+    @staticmethod
+    def wbVars(fan_in, fan_out, normal=True):
+        """Helper to initialize weights and biases, via He's adaptation
+        of Xavier init for ReLUs: https://arxiv.org/pdf/1502.01852v1.pdf
+        (distribution defaults to truncated Normal; else Uniform)
+        """
+        # (int, int, bool) -> (tf.Variable, tf.Variable)
+        stddev = tf.cast((2 / fan_in)**0.5, tf.float32)
+
+        initial_w = (
+            tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal else
+            tf.random_uniform([fan_in, fan_out], -stddev, stddev) # (range therefore not truly stddev)
+        )
+        initial_b = tf.zeros([fan_out])
+
+        return (tf.Variable(initial_w, trainable=True, name="weights"),
+                tf.Variable(initial_b, trainable=True, name="biases"))
+
+
+class Dense(Layer):
+    def __init__(self, scope="dense_layer", size=None, dropout=1.,
+                 nonlinearity=tf.identity):
+        """Fully-connected layer"""
+        # (str, int, float or tf.Variable, tf.op)
+        assert size, "Must specify layer size (num nodes)"
+        self.scope = scope
+        self.size = size
+        self.dropout = dropout # keep_prob
+        self.nonlinearity = nonlinearity
+
+    def __call__(self, tensor_in):
+        """Dense layer currying - i.e. to appy specified layer to any input tensor"""
+        # tf.Tensor -> tf.op
+        with tf.name_scope(self.scope):
+            w, b = Layer.wbVars(tensor_in.get_shape()[1].value, self.size)
+            w = tf.nn.dropout(w, self.dropout)
+            return self.nonlinearity(tf.matmul(tensor_in, w) + b)
 
 
 class VAE():
@@ -27,11 +84,14 @@ class VAE():
 
         self.architecture = architecture
 
+        self.architecture = architecture
         self.hyperparams = VAE.DEFAULTS.copy()
         self.hyperparams.update(**d_hyperparams)
 
-        (self.x_in, self.z_mean, self.latent_in, self.z_assign,
-         self.x_decoded_mean, self.cost, self.train_op) = self._buildGraph()
+        # handles for tensor ops to feed or fetch
+        (self.x_in, self.dropout, self.z_mean, self.z_log_sigma,
+         self.x_reconstructed, self.z_, self.x_reconstructed_,
+         self.cost, self.global_step, self.train_op) = self._buildGraph()
 
         self.sesh = tf.Session()
         self.sesh.run(tf.initialize_all_variables())
@@ -41,96 +101,48 @@ class VAE():
             logger.flush()
             logger.close()
 
+    @property
+    def step(self):
+        return self.global_step.eval(session=self.sesh)
+
     def _buildGraph(self):
-
-        def print_(var, name, first_n = 3, summarize = 5):
-            """Util for debugging by printing values during training"""
-            # tf.Print is identity fn with side effect of printing requested [vals]
-            try:
-                return tf.Print(var, [var], '{}: '.format(name), first_n=first_n,
-                                summarize=summarize)
-            except(TypeError):
-                return tf.Print(var, var, '{}: '.format(name), first_n=first_n,
-                                summarize=summarize)
-
-        def wbVars(fan_in: int, fan_out: int, normal=True):
-            """Helper to initialize weights and biases, via He's adaptation
-            of Xavier init for ReLUs: https://arxiv.org/pdf/1502.01852v1.pdf
-            (distribution defaults to truncated Normal; else Uniform)
-            """
-            stddev = tf.cast((2 / fan_in)**0.5, tf.float32)
-
-            initial_w = (
-                tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal#,
-                                    #name="xavier_truncated_normal") if normal
-                else tf.random_uniform([fan_in, fan_out], -stddev, stddev))#, # (range therefore not truly stddev)
-                                       #name="xavier_uniform"))
-            initial_b = tf.zeros([fan_out])#, name="zeros")
-
-            return (tf.Variable(initial_w, trainable=True, name="weights"),
-                    tf.Variable(initial_b, trainable=True, name="biases"))
-
-        def dense(scope="dense_layer", size=None, nonlinearity=tf.identity):
-            """Dense layer currying - i.e. to appy specified layer to any input tensor"""
-            assert size, "Must specify layer size (num nodes)"
-            def _dense(tensor_in):
-                with tf.name_scope(scope):
-                    w, b = wbVars(tensor_in.get_shape()[1].value, size)
-                    return nonlinearity(tf.matmul(tensor_in, w) + b)
-            return _dense
-
         x_in = tf.placeholder(tf.float32, shape=[None, # enables variable batch size
                                                  self.architecture[0]], name="x")
-        # encoding
-        xs = [x_in]
-        for hidden_size in self.architecture[1:-1]:
-            h = dense("encoding", hidden_size, tf.nn.relu)(xs[-1])
-            h = print_(h, "h")
-            xs.append(h)
-        #h_encoded = tf.identity(xs[-1], name="h_encoded")
-        h_encoded = xs[-1]
 
-        # latent space based on encoded output
-        z_mean = dense("z_mean", self.architecture[-1])(h_encoded)
-        z_log_sigma = dense("z_log_sigma", self.architecture[-1])(h_encoded)
+        dropout = tf.placeholder_with_default(1., shape=[], name="dropout")
+
+        # encoding: q(z|X)
+        encoding = [Dense("encoding", hidden_size, dropout, tf.nn.elu)
+                    # hidden layers reversed for fn composition s.t. list reads outer -> inner
+                    for hidden_size in reversed(self.architecture[1:-1])]
+        h_encoded = composeAll(encoding)(x_in)
+
+        # latent distribution defined by parameters generated from hidden encoding
+        z_mean = Dense("z_mean", self.architecture[-1], dropout)(h_encoded)
+        z_log_sigma = Dense("z_log_sigma", self.architecture[-1], dropout)(h_encoded)
         z = self.sampleGaussian(z_mean, z_log_sigma)
-        z = print_(z, "z")
 
-        #z = tf.placeholder_with_default(self.sampleGaussian(z_mean, z_log_sigma),
-                                        #[None, self.architecture[-1]])
-        #z = tf.Variable(tf.zeros([47, self.architecture[-1]]),
-                        #trainable=False) # dummy init to make z assignable
-        ## latent sampling
-        #with tf.name_scope("latent_sampling"):
-            #z = tf.assign(z, self.sampleGaussian(z_mean, z_log_sigma), validate_shape=False)
-        ## direct exploration of latent manifold to generate reconstructed outputs
-        #with tf.name_scope("latent_feed"):
-            #z_in = tf.placeholder(tf.float32, name="z_in",
-                                    #shape=[None, self.architecture[-1]])
-            #z_ = tf.assign(z, latent_in)
-
-        # decoding
-        hs = [z]
-        # iterate backwards through symmetric hidden architecture
-        for hidden_size in reversed(self.architecture[1:-1]): # aka [-2:0:-1]
-            h = dense("decoding", hidden_size, tf.nn.relu)(hs[-1])
-            hs.append(h)
-        h_decoded = hs[-1]
-        #h_decoded = tf.identity(hs[-1], name="h_decoded")
-
-        # reconstructed output
-        x_decoded_mean = tf.identity(
-            dense("x_decoding", self.architecture[0], tf.sigmoid)(h_decoded),
-            name = "x_reconstructed")
+        # decoding: p(X|z)
+        # assumes symmetric hidden architecture
+        decoding = [Dense("decoding", hidden_size, dropout, tf.nn.elu)
+                    for hidden_size in self.architecture[1:-1]]
+        # prepend final reconstruction as outermost fn
+        # modeled as Bernoulli (i.e. with binary cross-entropy)
+        decoding.insert(0, Dense("x_decoding", self.architecture[0], dropout, tf.nn.sigmoid))
+        x_reconstructed = tf.identity(composeAll(decoding)(z), name="x_reconstructed")
 
         # loss
-        cross_entropy = VAE.crossEntropy(x_decoded_mean, x_in) # reconstruction loss
-        cross_entropy = print_(cross_entropy, "ce")
-        kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma) # mismatch b/w learned latent dist and prior
-        kl_loss = print_(kl_loss, "kl")
-        cost = tf.add(cross_entropy, kl_loss, name="cost")
+        # log likelihood / reconstruction loss
+        cross_entropy = VAE.crossEntropy(x_reconstructed, x_in)
+        #cross_entropy = print_(cross_entropy, "ce")
+        # Kullback-Leibler divergence: mismatch b/w learned latent dist and prior
+        kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
+        #kl_loss = print_(kl_loss, "kl")
+        cost = tf.identity(cross_entropy + kl_loss, name="cost")
+        #cost = print_(cost, "cost")
 
         # optimization
+        global_step = tf.Variable(0, trainable=False)
         with tf.name_scope("Adam_optimizer"):
             optimizer = tf.train.AdamOptimizer(self.hyperparams["learning_rate"])
             tvars = tf.trainable_variables()
@@ -139,12 +151,18 @@ class VAE():
             grads_and_vars = optimizer.compute_gradients(cost, tvars)
             clipped = [(tf.clip_by_value(grad, -1, 1), tvar) # gradient clipping
                     for grad, tvar in grads_and_vars]
-            train_op = optimizer.apply_gradients(clipped, name="minimize_cost")
+            #train_op = optimizer.apply_gradients(zip(grads, tvars))
+            train_op = optimizer.apply_gradients(clipped, global_step=global_step,
+                                                 name="minimize_cost")
             #train_op = (tf.train.AdamOptimizer(self.hyperparams["learning_rate"])
                                 #.minimize(cost))
 
-        latent_in, z_assign = 47, 47
-        return (x_in, z_mean, latent_in, z_assign, x_decoded_mean, cost, train_op)
+        # ops to directly explore latent space
+        z_ = tf.placeholder(tf.float32, shape=[1, self.architecture[-1]], name="latent_in")
+        x_reconstructed_ = composeAll(decoding)(z_)
+
+        return (x_in, dropout, z_mean, z_log_sigma, x_reconstructed, z_,
+                x_reconstructed_, cost, global_step, train_op)
 
     def sampleGaussian(self, mu, log_sigma):
         """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
