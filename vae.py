@@ -133,12 +133,12 @@ class VAE():
 
         # loss
         # log likelihood / reconstruction loss
-        cross_entropy = VAE.crossEntropy(x_reconstructed, x_in)
+        ce_loss = VAE.crossEntropy(x_reconstructed, x_in)
         #cross_entropy = print_(cross_entropy, "ce")
         # Kullback-Leibler divergence: mismatch b/w learned latent dist and prior
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
         #kl_loss = print_(kl_loss, "kl")
-        cost = tf.identity(cross_entropy + kl_loss, name="cost")
+        cost = tf.reduce_mean(ce_loss + kl_loss, name="cost")
         #cost = print_(cost, "cost")
 
         # optimization
@@ -173,93 +173,72 @@ class VAE():
             return mu + epsilon * tf.exp(log_sigma)
 
     @staticmethod
-    def crossEntropy(observed, actual, offset = 1e-10):
+    def crossEntropy(observed, actual, offset = 1e-12):
         with tf.name_scope("binary_cross_entropy"):
-            # bound obs by clipping to avoid NaN
+            # bound by clipping to avoid nan
             clip = functools.partial(tf.clip_by_value, clip_value_min=offset,
                                      clip_value_max=np.inf)
-            #obs = tf.clip_by_value(observed, offset, 1 - offset)
             return -tf.reduce_sum(actual * tf.log(clip(observed)) +
                                    (1 - actual) * tf.log(clip(1 - observed)))
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
         with tf.name_scope("KL_divergence"):
-            return -0.5 * tf.reduce_mean(1 + log_sigma - mu**2 - tf.exp(log_sigma))
+            return -0.5 * tf.reduce_sum(1 + log_sigma - mu**2 - tf.exp(log_sigma))
 
     def encode(self, x):
-        """Encoder from inputs to latent space"""
-        encoded = self.sesh.run(self.z_mean, feed_dict={self.x_in: x})
-        return encoded
+        """Encoder from inputs to latent distribution parameters"""
+        # np.array -> [float, float]
+        feed_dict = {self.x_in: x, self.dropout: 1.}
+        return self.sesh.run([self.z_mean, self.z_log_sigma], feed_dict=feed_dict)
 
-    # def decode(self, latent_pt):
-    #     """Generator from latent space to reconstructed inputs"""
-    #     #with tf.Session() as sesh:
-    #         #sesh.run(tf.initialize_all_variables())
-    #         #_, generator = sesh.run([self.assign_op, self.x_decoded_mean],
-    #                                 #feed_dict={self.latent_in: latent_pt})
-    #     #return generator
-    #     _, generator = self.sesh.run([self.z_assign, self.x_decoded_mean],
-    #                                  feed_dict={self.latent_in: latent_pt})
-    #     return generator
+    def decode(self, latent_pt):
+        """Generative decoder from latent space to reconstructions of input space"""
+        # np.array -> np.array
+        feed_dict = {self.z_: latent_pt, self.dropout: 1.}
+        return self.sesh.run(self.x_reconstructed_, feed_dict=feed_dict)
 
-    def vae(self, x, train=False):
+    def vae(self, x):
         """End-to-end autoencoder"""
-        fetches = ([self.x_decoded_mean, self.cost, self.train_op] if train
-                   else [self.x_decoded_mean])
-        out = self.sesh.run(fetches, feed_dict={self.x_in: x})
-        return out
+        # np.array -> np.array
+        return self.decode(self.sampleGaussian(*self.encode(x)))
 
-    def train(self, X, verbose=True):
-        i = 0
-        while True:
-            try:
-                x, labels = X.train.next_batch(self.hyperparams['batch_size'])
-                x_reconstructed, cost, _ = self.vae(x, train=True)
-                i += 1
+    def train(self, X, max_iter=np.inf, max_epochs=np.inf, cross_validate=True, verbose=True):
+        try:
+            err_train = 0
+            #err_cv = 0
+            while True:
+                x, labels = X.train.next_batch(self.hyperparams["batch_size"])
+                feed_dict = {self.x_in: x,
+                             self.dropout: self.hyperparams["dropout"]}
+                fetches = [self.x_reconstructed, self.cost, self.global_step, self.train_op]
+                x_reconstructed, cost, i, _ = self.sesh.run(fetches, feed_dict)
 
-                # if i%100 == 0 and verbose:
-                #     print("x_in: ", x)
-                #     print("x_reconstructed: ", x_reconstructed)
+                err_train += cost
 
-                if i%100 == 0 and verbose:
-                    print("cost: ", cost)
+                if i%500 == 0 and verbose:
+                    print("round {} --> avg cost: ".format(i), err_train / i)
 
-                if i%1000 == 0 and verbose:
-                    n = 10
-                    dim = int(self.architecture[0]**0.5)
-                    #from IPython import embed; embed()
-                    plt.figure(figsize = (20, 4))
-                    for idx in range(1, n):
-                        # display original
-                        ax = plt.subplot(2, n, idx)
-                        plt.imshow(x[idx].reshape([dim, dim]), cmap="Greys")
-                        ax.get_xaxis().set_visible(False)
-                        ax.get_yaxis().set_visible(False)
+                if i%2000 == 0 and verbose:
+                    self.plotSubset(x, x_reconstructed, n=10, name="train")
 
-                        # display reconstruction
-                        ax = plt.subplot(2, n, idx + n)
-                        plt.imshow(x_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
-                        ax.get_xaxis().set_visible(False)
-                        ax.get_yaxis().set_visible(False)
+                    if cross_validate:
+                        x, labels = X.validation.next_batch(self.hyperparams["batch_size"])
+                        feed_dict = {self.x_in: x}
+                        fetches = [self.x_reconstructed, self.cost]
+                        x_reconstructed, cost = self.sesh.run(fetches, feed_dict)
 
-                    plt.savefig('blkwht_{}.png'.format(i))
-                    plt.show()
+                        #err_cv += cost
+                        print("round {} --> CV cost: ".format(i), cost)
 
-                    #across = int(np.sqrt(self.hyperparams["batch_size"]))
-                    #down = across
-                    ##down = int(self.hyperparams["batch_size"] / across) + self.hyperparams["batch_size"] % across
-                    #dims = [int(inputs * self.architecture[0]**0.5) for inputs in (across, down)]
-                    #plt.subplot(211)
-                    #plt.imshow(x.reshape(dims), cmap='Greys')
-                    #plt.subplot(212)
-                    #plt.imshow(x_reconstructed.reshape(dims), cmap='Greys')
-                    #plt.savefig('blkwht_{}.png'.format(i))
-                    #from IPython import embed; embed()
-                    #plt.show()
+                        self.plotSubset(x, x_reconstructed, n=10, name="cv")
 
-            except(KeyboardInterrupt):
-                plt.show()
+                if i >= max_iter or X.train.epochs_completed >= max_epochs:
+                    print("final cost: ", cost)
+                    break
+
+        except(KeyboardInterrupt):
+            return
 
 
 def test_mnist():
@@ -267,7 +246,7 @@ def test_mnist():
     mnist = input_data.read_data_sets("MNIST_data")
 
     vae = VAE()
-    vae.train(mnist)
+    vae.train(mnist, max_iter=100000, verbose=False)
 
 if __name__ == "__main__":
     test_mnist()
