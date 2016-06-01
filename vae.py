@@ -3,25 +3,23 @@ import numpy as np
 import tensorflow as tf
 
 
+# TODO: prettytensor ?
 ARCHITECTURE = [784, # MNIST = 28*28
-                128,
-                #500, 500, # intermediate encoding
+                #128, # intermediate encoding
+                500, 500,
                 2] # latent space dims
 # (and symmetrically back out again)
 
 
-#@ops.RegisterGradient("PlaceholderWithDefault")
-#def _PlaceholderWithDefault(op, grad):
-    #default = op.inputs[0]
-    #tf.gradients()
 
 class VAE():
     """Variational Autoencoder"""
 
     DEFAULTS = {
-        "batch_size": 100,
-        "epsilon_std": 0.001,
-        "learning_rate": 0.002
+        "batch_size": 128,
+        "epsilon_std": 1E-3,
+        "learning_rate": 1E-4,
+        "dropout": 0.9 # TODO
     }
 
     def __init__(self, architecture=ARCHITECTURE, d_hyperparams={},
@@ -39,7 +37,7 @@ class VAE():
         self.sesh.run(tf.initialize_all_variables())
 
         if save_graph_def:
-            logger = tf.train.SummaryWriter('.', self.sesh.graph)
+            logger = tf.train.SummaryWriter("./log", self.sesh.graph)
             logger.flush()
             logger.close()
 
@@ -137,9 +135,8 @@ class VAE():
             optimizer = tf.train.AdamOptimizer(self.hyperparams["learning_rate"])
             tvars = tf.trainable_variables()
             #grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars), 5)
-            #train_op = optimizer.apply_gradients(zip(grads, tvars))
-            grads_and_vars = optimizer.compute_gradients(cost, tvars)
             #global_norm = tf.global_norm(tvars)
+            grads_and_vars = optimizer.compute_gradients(cost, tvars)
             clipped = [(tf.clip_by_value(grad, -1, 1), tvar) # gradient clipping
                     for grad, tvar in grads_and_vars]
             train_op = optimizer.apply_gradients(clipped, name="minimize_cost")
@@ -161,9 +158,11 @@ class VAE():
     def crossEntropy(observed, actual, offset = 1e-10):
         with tf.name_scope("binary_cross_entropy"):
             # bound obs by clipping to avoid NaN
-            obs = tf.clip_by_value(observed, offset, 1 - offset)
-            return -tf.reduce_mean(actual * tf.log(obs) +
-                                   (1 - actual) * tf.log(1 - obs))
+            clip = functools.partial(tf.clip_by_value, clip_value_min=offset,
+                                     clip_value_max=np.inf)
+            #obs = tf.clip_by_value(observed, offset, 1 - offset)
+            return -tf.reduce_sum(actual * tf.log(clip(observed)) +
+                                   (1 - actual) * tf.log(clip(1 - observed)))
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
@@ -246,9 +245,8 @@ class VAE():
 
 
 def test_mnist():
-    import input_data
-    mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-    #imgs, labels = mnist.train.next_batch(100)
+    from tensorflow.examples.tutorials.mnist import input_data
+    mnist = input_data.read_data_sets("MNIST_data")
 
     vae = VAE()
     vae.train(mnist)
