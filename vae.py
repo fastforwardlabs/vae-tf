@@ -1,7 +1,11 @@
+import datetime
 import functools
+import os
 import sys
 
 from functional import compose, partial
+import matplotlib.cm as cm
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -80,9 +84,11 @@ class VAE():
     }
 
     def __init__(self, architecture=ARCHITECTURE, d_hyperparams={},
-                 save_graph_def=True):
+                 save_graph_def=True, plots_outdir="./png"):
 
-        self.architecture = architecture
+        self.datetime = "".join(c for c in str(datetime.datetime.today())
+                                if c in "0123456789 ")[2:13].replace(" ", "_") # YYMMDD-HHMM
+        self.plots_outdir = os.path.abspath(plots_outdir)
 
         self.architecture = architecture
         self.hyperparams = VAE.DEFAULTS.copy()
@@ -240,6 +246,68 @@ class VAE():
         except(KeyboardInterrupt):
             return
 
+    def plotSubset(self, x_in, x_reconstructed, n=10, save=True, name="subset"):
+        """Util to plot subset of inputs and reconstructed outputs"""
+        plt.figure(figsize = (n * 2, 4))
+        plt.title("round {}: {}".format(self.step, name))
+        # assume square images
+        dim = int(self.architecture[0]**0.5)
+
+        for idx in range(1, n+1):
+            # display original
+            ax = plt.subplot(2, n, idx)
+            plt.imshow(x_in[idx].reshape([dim, dim]), cmap="Greys")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            # display reconstruction
+            ax = plt.subplot(2, n, idx + n)
+            plt.imshow(x_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+        if save:
+            title = "{}_vae_{}_round_{}_{}.png".format(
+                self.datetime, "_".join(map(str, self.architecture)), self.step, name)
+            plt.savefig(os.path.join(self.plots_outdir, title))
+
+        plt.show()
+
+    def plotInLatent(self, x_in, labels=np.array([]), save=True, name="data"):
+        """Util to plot points in 2-D latent space"""
+        mus, log_sigmas = self.encode(x_in)
+        xs, ys = mus.T
+
+        plt.figure()
+        plt.title("round {}: {} in latent space".format(self.step, name))
+        ax = plt.subplot(111)
+
+        if labels.any():
+            classes = set(labels)
+            colormap = cm.rainbow(np.linspace(0, 1, len(classes)))
+            plt.scatter(xs, ys, alpha=0.8, c=[colormap[i] for i in labels])
+
+            # make room for legend
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+            handles = [mpatches.Circle((0,0), label=class_, color=colormap[i])
+                       for i, class_ in enumerate(classes)]
+            ax.legend(handles=handles, shadow=True, bbox_to_anchor=(1.05, 0.45),
+                      fancybox=True, loc='center left')
+
+        else:
+            plt.scatter(xs, ys, alpha=0.8)
+
+        plt.show()
+        if save:
+            title = "{}_latent_{}_round_{}_{}.png".format(
+                self.datetime, "_".join(map(str, self.architecture)), self.step, name)
+            plt.savefig(os.path.join(self.plots_outdir, title))
+
+    def exploreLatent():
+        # TODO
+        pass
+
 
 def test_mnist():
     from tensorflow.examples.tutorials.mnist import input_data
@@ -247,6 +315,7 @@ def test_mnist():
 
     vae = VAE()
     vae.train(mnist, max_iter=100000, verbose=False)
+    vae.plotInLatent(mnist.train.images, mnist.train.labels, name="train")
 
 if __name__ == "__main__":
     test_mnist()
