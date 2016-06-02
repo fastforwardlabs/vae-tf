@@ -14,7 +14,7 @@ import tensorflow as tf
 # TODO: prettytensor ?
 ARCHITECTURE = [784, # MNIST = 28*28
                 #128, # intermediate encoding
-                500, 500,
+                500, #500,
                 2] # latent space dims
 # (and symmetrically back out again)
 
@@ -44,7 +44,8 @@ class Layer():
         stddev = tf.cast((2 / fan_in)**0.5, tf.float32)
 
         initial_w = (
-            tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal else
+            #tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal else
+            tf.random_normal([fan_in, fan_out], stddev=stddev) if normal else
             tf.random_uniform([fan_in, fan_out], -stddev, stddev) # (range therefore not truly stddev)
         )
         initial_b = tf.zeros([fan_out])
@@ -126,6 +127,7 @@ class VAE():
         # latent distribution defined by parameters generated from hidden encoding
         z_mean = Dense("z_mean", self.architecture[-1], dropout)(h_encoded)
         z_log_sigma = Dense("z_log_sigma", self.architecture[-1], dropout)(h_encoded)
+        # z ~ N(z_mean, z_sigma_sq)
         z = self.sampleGaussian(z_mean, z_log_sigma)
 
         # decoding: p(X|z)
@@ -138,13 +140,15 @@ class VAE():
         x_reconstructed = tf.identity(composeAll(decoding)(z), name="x_reconstructed")
 
         # loss
-        # log likelihood / reconstruction loss
-        ce_loss = VAE.crossEntropy(x_reconstructed, x_in)
+        # goal: increase lower bound on log likelihood
+        # reconstruction loss (log likelihood?)
+        rec_loss = VAE.crossEntropy(x_reconstructed, x_in)
         #cross_entropy = print_(cross_entropy, "ce")
         # Kullback-Leibler divergence: mismatch b/w learned latent dist and prior
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
         #kl_loss = print_(kl_loss, "kl")
-        cost = tf.reduce_mean(ce_loss + kl_loss, name="cost")
+        cost = tf.reduce_mean(rec_loss + kl_loss, name="cost")
+        #cost = tf.add(rec_loss, kl_loss, name="cost")
         #cost = print_(cost, "cost")
 
         # optimization
@@ -164,7 +168,7 @@ class VAE():
                                 #.minimize(cost))
 
         # ops to directly explore latent space
-        z_ = tf.placeholder(tf.float32, shape=[1, self.architecture[-1]], name="latent_in")
+        z_ = tf.placeholder(tf.float32, shape=[None, self.architecture[-1]], name="latent_in")
         x_reconstructed_ = composeAll(decoding)(z_)
 
         return (x_in, dropout, z_mean, z_log_sigma, x_reconstructed, z_,
@@ -173,35 +177,40 @@ class VAE():
     def sampleGaussian(self, mu, log_sigma):
         """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
         with tf.name_scope("sample_gaussian"):
-            epsilon = tf.random_normal(tf.shape(mu), mean=0, stddev=
-                                       self.hyperparams['epsilon_std'],
+            # sampling / reparametrization trick
+            epsilon = tf.random_normal(tf.shape(log_sigma), mean=0, stddev=
+                                       self.hyperparams['epsilon_std'], # TODO: 1. ?
                                        name="epsilon")
             return mu + epsilon * tf.exp(log_sigma)
 
     @staticmethod
     def crossEntropy(observed, actual, offset = 1e-12):
         with tf.name_scope("binary_cross_entropy"):
-            # bound by clipping to avoid nan
-            clip = functools.partial(tf.clip_by_value, clip_value_min=offset,
-                                     clip_value_max=np.inf)
-            return -tf.reduce_sum(actual * tf.log(clip(observed)) +
-                                   (1 - actual) * tf.log(clip(1 - observed)))
+            # bound by clipping to avoid NaN
+            obs = tf.clip_by_value(observed, offset, 1 - offset)
+            return -tf.reduce_sum(actual * tf.log(obs) +
+                                  (1 - actual) * tf.log(1 - obs))#, 0)
+
+            # clip = functools.partial(tf.clip_by_value, clip_value_min=offset,
+            #                          clip_value_max=np.inf)
+            # return -tf.reduce_sum(actual * tf.log(clip(observed)) +
+            #                        (1 - actual) * tf.log(clip(1 - observed)))
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
         with tf.name_scope("KL_divergence"):
-            return -0.5 * tf.reduce_sum(1 + log_sigma - mu**2 - tf.exp(log_sigma))
+            return -0.5 * tf.reduce_sum(1 + log_sigma - mu**2 - tf.exp(log_sigma))#, 0)
 
     def encode(self, x):
         """Encoder from inputs to latent distribution parameters"""
         # np.array -> [float, float]
-        feed_dict = {self.x_in: x, self.dropout: 1.}
+        feed_dict = {self.x_in: x}
         return self.sesh.run([self.z_mean, self.z_log_sigma], feed_dict=feed_dict)
 
     def decode(self, latent_pt):
         """Generative decoder from latent space to reconstructions of input space"""
         # np.array -> np.array
-        feed_dict = {self.z_: latent_pt, self.dropout: 1.}
+        feed_dict = {self.z_: latent_pt}
         return self.sesh.run(self.x_reconstructed_, feed_dict=feed_dict)
 
     def vae(self, x):
