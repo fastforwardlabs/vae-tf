@@ -1,5 +1,6 @@
 import datetime
 import functools
+import itertools
 import os
 import sys
 
@@ -262,15 +263,18 @@ class VAE():
         # assume square images
         dim = int(self.architecture[0]**0.5)
 
-        for idx in range(1, n+1):
+        #for idx in range(1, n+1):
+        for idx in range(n):
             # display original
-            ax = plt.subplot(2, n, idx)
+            #ax = plt.subplot(2, n, idx)
+            ax = plt.subplot(2, n, idx + 1)
             plt.imshow(x_in[idx].reshape([dim, dim]), cmap="Greys")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             # display reconstruction
-            ax = plt.subplot(2, n, idx + n)
+            #ax = plt.subplot(2, n, idx + n)
+            ax = plt.subplot(2, n, idx + n + 1)
             plt.imshow(x_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
@@ -284,6 +288,7 @@ class VAE():
 
     def plotInLatent(self, x_in, labels=np.array([]), save=True, name="data"):
         """Util to plot points in 2-D latent space"""
+        assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
         mus, log_sigmas = self.encode(x_in)
         xs, ys = mus.T
 
@@ -313,9 +318,53 @@ class VAE():
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
             plt.savefig(os.path.join(self.plots_outdir, title))
 
-    def exploreLatent():
+    def exploreLatent(self, nx = 20, ny = 20, save=True):
+        """Util to explore low-dimensional manifold of latent space"""
+        assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
+
+        # z_xs = np.linspace(-3, 3, nx)
+        # z_ys = np.linspace(-3, 3, ny)
+
+        # inspired by https://jmetzen.github.io/2015-11-27/vae.html
+        dim = int(self.architecture[0]**0.5)
+        canvas = np.empty([dim * ny, dim * nx])
+
+        # for i, z_xi in enumerate(z_xs):
+        #     for j, z_yj in enumerate(z_ys):
+        #         x_reconstructed = self.decode([z_xi, z_yj])
+        #         canvas[(nx-i-1) * dim : (nx-i) * dim,
+        #                j * dim : (j+1) * dim] = x_reconstructed.reshape([dim, dim])
+        # complex number steps act to replace np.linspace
+        X, Y = np.mgrid[-3:3:nx*1j, -3:3:ny*1j]
+        for i, j in itertools.product(range(nx), range(ny)):
+            x_reconstructed = self.decode([[X[i,j], Y[i,j]]])
+            canvas[(i*dim):((i+1)*dim-1),
+                   (j*dim):((j+1)*dim-1)] = x_reconstructed.reshape([dim, dim])
+        plt.figure(figsize=(8, 10))
+        plt.imshow(canvas)#, origin="upper")
+        #plt.tight_layout()
+
+        if save:
+            title = "{}_latent_{}_round_{}_explore.png".format(
+                self.datetime, "_".join(map(str, self.architecture)), self.step)
+            plt.savefig(os.path.join(self.plots_outdir, title))
+
+    def interpolate(self, latent_1, latent_2, n=20):
+        """Interpolate between two points in arbitrary-dimensional latent space"""
         # TODO
-        pass
+        interpolations = [np.linspace(start, end, n)
+                          for start, end in zip(latent_1, latent_2)]
+        zs = np.array([[interp[i] for interp in interpolations] for i in range(n)])
+        xs_reconstructed = self.decode(zs)
+
+        plt.figure((20, 4))
+        dim = int(self.architecture[0]**0.5)
+
+        for idx in range(1, n+1):
+            ax = plt.subplot(2, n, idx)
+            plt.imshow(xs_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
 
 
 def test_mnist():
@@ -323,8 +372,12 @@ def test_mnist():
     mnist = input_data.read_data_sets("MNIST_data")
 
     vae = VAE()
-    vae.train(mnist, max_iter=100000, verbose=False)
+    #vae.train(mnist, max_iter=100000, verbose=False)
+    vae.train(mnist, max_iter=4000, verbose=False)
+
     vae.plotInLatent(mnist.train.images, mnist.train.labels, name="train")
+    vae.exploreLatent(nx=20, ny=20)
+    vae.interpolate(np.random.rand(2), np.random.rand(2))
 
 if __name__ == "__main__":
     test_mnist()
