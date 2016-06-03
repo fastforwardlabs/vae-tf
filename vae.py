@@ -76,20 +76,24 @@ class Dense(Layer):
 
 
 class VAE():
-    """Variational Autoencoder"""
+    """Variational Autoencoder
+
+    see: Kingma & Welling - Auto-Encoding Variational Bayes
+    (http://arxiv.org/pdf/1312.6114v10.pdf)
+    """
 
     DEFAULTS = {
         "batch_size": 128,
-        "epsilon_std": 1E-3,
+        "epsilon_std": 1.,#1E-3,
         "learning_rate": 1E-4,
-        "dropout": 0.9 # TODO
+        "dropout": 0.9
     }
 
     def __init__(self, architecture=ARCHITECTURE, d_hyperparams={},
                  save_graph_def=True, plots_outdir="./png"):
-
+        # YYMMDD_HHMM
         self.datetime = "".join(c for c in str(datetime.datetime.today())
-                                if c in "0123456789 ")[2:13].replace(" ", "_") # YYMMDD-HHMM
+                                if c.isdigit() or c.isspace())[2:13].replace(" ", "_")
         self.plots_outdir = os.path.abspath(plots_outdir)
 
         self.architecture = architecture
@@ -111,6 +115,7 @@ class VAE():
 
     @property
     def step(self):
+        """Train step"""
         return self.global_step.eval(session=self.sesh)
 
     def _buildGraph(self):
@@ -119,52 +124,59 @@ class VAE():
 
         dropout = tf.placeholder_with_default(1., shape=[], name="dropout")
 
-        # encoding: q(z|X)
+        # encoding / "recognition": q(z|x)
+        # approximation of true posterior p(z|x) -- intractable to calculate
         encoding = [Dense("encoding", hidden_size, dropout, tf.nn.elu)
                     # hidden layers reversed for fn composition s.t. list reads outer -> inner
                     for hidden_size in reversed(self.architecture[1:-1])]
         h_encoded = composeAll(encoding)(x_in)
 
-        # latent distribution defined by parameters generated from hidden encoding
+        # latent distribution Z from which X is generated, parameterized based on hidden encoding
         z_mean = Dense("z_mean", self.architecture[-1], dropout)(h_encoded)
         z_log_sigma = Dense("z_log_sigma", self.architecture[-1], dropout)(h_encoded)
-        # z ~ N(z_mean, z_sigma_sq)
+
+        # let z ~ N(z_mean, np.exp(z_log_sigma)**2)
+        # probabilistic decoder - given z, can observe distribution over corresponding x!
+        # kingma & welling: only 1 draw per datapoint necessary as long as minibatch is large enough (>100)
         z = self.sampleGaussian(z_mean, z_log_sigma)
 
-        # decoding: p(X|z)
+        # decoding / "generative": p(x|z)
         # assumes symmetric hidden architecture
         decoding = [Dense("decoding", hidden_size, dropout, tf.nn.elu)
                     for hidden_size in self.architecture[1:-1]]
         # prepend final reconstruction as outermost fn
-        # modeled as Bernoulli (i.e. with binary cross-entropy)
+        # restore original dims and squash vals [0, 1]
         decoding.insert(0, Dense("x_decoding", self.architecture[0], dropout, tf.nn.sigmoid))
         x_reconstructed = tf.identity(composeAll(decoding)(z), name="x_reconstructed")
 
+        # optimization
+        # goal: find variational & generative parameters that best reconstruct x
+        # i.e. maximize log likelihood over observed datapoints
+        # do this by maximizing (variational) lower bound on each marginal log likelihood
+        # goal: increase (variationl) lower bound on marginal log likelihood
         # loss
-        # goal: increase lower bound on log likelihood
-        # reconstruction loss (log likelihood?)
+        # reconstruction loss, modeled as Bernoulli (i.e. with binary cross-entropy) / log likelihood
         rec_loss = VAE.crossEntropy(x_reconstructed, x_in)
         #cross_entropy = print_(cross_entropy, "ce")
-        # Kullback-Leibler divergence: mismatch b/w learned latent dist and prior
+        # Kullback-Leibler divergence: mismatch b/w approximate vs. true posterior
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
         #kl_loss = print_(kl_loss, "kl")
         cost = tf.reduce_mean(rec_loss + kl_loss, name="cost")
         #cost = tf.add(rec_loss, kl_loss, name="cost")
         #cost = print_(cost, "cost")
 
-        # optimization
         global_step = tf.Variable(0, trainable=False)
         with tf.name_scope("Adam_optimizer"):
             optimizer = tf.train.AdamOptimizer(self.hyperparams["learning_rate"])
             tvars = tf.trainable_variables()
-            #grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars), 5)
-            #global_norm = tf.global_norm(tvars)
             grads_and_vars = optimizer.compute_gradients(cost, tvars)
             clipped = [(tf.clip_by_value(grad, -1, 1), tvar) # gradient clipping
                     for grad, tvar in grads_and_vars]
-            #train_op = optimizer.apply_gradients(zip(grads, tvars))
             train_op = optimizer.apply_gradients(clipped, global_step=global_step,
                                                  name="minimize_cost")
+            #grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars), 5)
+            #global_norm = tf.global_norm(tvars)
+            #train_op = optimizer.apply_gradients(zip(grads, tvars))
             #train_op = (tf.train.AdamOptimizer(self.hyperparams["learning_rate"])
                                 #.minimize(cost))
 
