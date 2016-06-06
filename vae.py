@@ -308,7 +308,7 @@ class VAE():
         """Util to plot points in 2-D latent space"""
         assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
         mus, log_sigmas = self.encode(x_in)
-        xs, ys = mus.T
+        ys, xs = mus.T
 
         plt.figure()
         plt.title("round {}: {} in latent space".format(self.step, name))
@@ -340,26 +340,42 @@ class VAE():
         """Util to explore low-dimensional manifold of latent space"""
         assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
 
-        # z_xs = np.linspace(-3, 3, nx)
-        # z_ys = np.linspace(-3, 3, ny)
-
         # inspired by https://jmetzen.github.io/2015-11-27/vae.html
         dim = int(self.architecture[0]**0.5)
         canvas = np.empty([dim * ny, dim * nx])
 
+        # z_xs = np.linspace(-3, 3, nx)
+        # z_ys = np.linspace(-3, 3, ny)
         # for i, z_xi in enumerate(z_xs):
         #     for j, z_yj in enumerate(z_ys):
         #         x_reconstructed = self.decode([z_xi, z_yj])
         #         canvas[(nx-i-1) * dim : (nx-i) * dim,
         #                j * dim : (j+1) * dim] = x_reconstructed.reshape([dim, dim])
+
         # complex number steps act to replace np.linspace
-        X, Y = np.mgrid[-3:3:nx*1j, -3:3:ny*1j]
-        for i, j in itertools.product(range(nx), range(ny)):
-            x_reconstructed = self.decode([[X[i,j], Y[i,j]]])
-            canvas[(i*dim):((i+1)*dim-1),
-                   (j*dim):((j+1)*dim-1)] = x_reconstructed.reshape([dim, dim])
+        #X, Y = np.mgrid[-3:3:nx*1j, -3:3:ny*1j]
+        #for i, j in itertools.product(range(nx), range(ny)):
+            #x_reconstructed = self.decode([[X[i,j], Y[i,j]]])
+            #canvas[(i * dim):((i + 1) * dim),
+                   #(j * dim):((j + 1) * dim)] = x_reconstructed.reshape([dim, dim])
+
+        #yxs = np.mgrid[-3:3:nx*1j, -3:3:ny*1j].ravel(order="F").reshape([ny, nx, 2]) # [ny, nx, 2]
+        xs = np.rollaxis(np.mgrid[-3:3:ny*1j, -3:3:nx*1j], 0, 3) # [nx, ny, 2]
+        # for idx in np.ndindex(ny - 1, nx - 1): # row i, col j where row is vertical/Y axis
+        #     x_reconstructed = self.decode(xs[idx]
+        #canvas = np.array([self.decode(x).reshape([dim, dim]) for x in iter(np.rollaxis(xs, 0, 3))]).reshape([dim * ny, dim * nx])
+
+        for i, j in np.ndindex(xs.shape[:-1]): # row i, col j where row is vertical/Y axis
+            x_reconstructed = self.decode([xs[i, j]]) # TODO: decode all at once ?
+            canvas[(i * dim):((i + 1) * dim),
+                   (j * dim):((j + 1) * dim)] = x_reconstructed.reshape([dim, dim])
+
+        # for i in xrange(ny - 1):
+        #     canvas[i] =
+
+
         plt.figure(figsize=(8, 10))
-        plt.imshow(canvas)#, origin="upper")
+        plt.imshow(canvas, cmap="Greys")#, origin="upper")
         #plt.tight_layout()
 
         if save:
