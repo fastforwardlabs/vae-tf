@@ -234,7 +234,7 @@ class VAE():
     def vae(self, x):
         """End-to-end autoencoder"""
         # np.array -> np.array
-        return self.decode(self.sampleGaussian(*self.encode(x)))
+        return self.decode(self.sesh.run(self.sampleGaussian(*self.encode(x))))
 
     def train(self, X, max_iter=np.inf, max_epochs=np.inf, cross_validate=True, verbose=True):
         try:
