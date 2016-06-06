@@ -275,6 +275,7 @@ class VAE():
 
     def plotSubset(self, x_in, x_reconstructed, n=10, save=True, name="subset"):
         """Util to plot subset of inputs and reconstructed outputs"""
+        n = min(n, x_in.shape[0])
         plt.figure(figsize = (n * 2, 4))
         plt.title("round {}: {}".format(self.step, name))
         # assume square images
@@ -284,7 +285,7 @@ class VAE():
         for idx in range(n):
             # display original
             #ax = plt.subplot(2, n, idx)
-            ax = plt.subplot(2, n, idx + 1)
+            ax = plt.subplot(2, n, idx + 1) # rows, cols, subplot number from 1
             plt.imshow(x_in[idx].reshape([dim, dim]), cmap="Greys")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
