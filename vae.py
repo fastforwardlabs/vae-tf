@@ -207,7 +207,7 @@ class VAE():
             # bound by clipping to avoid NaN
             obs = tf.clip_by_value(observed, offset, 1 - offset)
             return -tf.reduce_sum(actual * tf.log(obs) +
-                                  (1 - actual) * tf.log(1 - obs))#, 0)
+                                  (1 - actual) * tf.log(1 - obs), 1)
 
             # clip = functools.partial(tf.clip_by_value, clip_value_min=offset,
             #                          clip_value_max=np.inf)
@@ -217,7 +217,7 @@ class VAE():
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
         with tf.name_scope("KL_divergence"):
-            return -0.5 * tf.reduce_sum(1 + log_sigma - mu**2 - tf.exp(log_sigma))#, 0)
+            return -0.5 * tf.reduce_sum(1 + log_sigma - mu**2 - tf.exp(log_sigma), 1)
 
     def encode(self, x):
         """Encoder from inputs to latent distribution parameters"""
