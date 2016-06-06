@@ -383,22 +383,30 @@ class VAE():
                 self.datetime, "_".join(map(str, self.architecture)), self.step)
             plt.savefig(os.path.join(self.plots_outdir, title))
 
-    def interpolate(self, latent_1, latent_2, n=20):
+    def interpolate(self, latent_1, latent_2, n=20, save=True):
         """Interpolate between two points in arbitrary-dimensional latent space"""
         # TODO
-        interpolations = [np.linspace(start, end, n)
-                          for start, end in zip(latent_1, latent_2)]
-        zs = np.array([[interp[i] for interp in interpolations] for i in range(n)])
+        # interpolations = [np.linspace(start, end, n)
+        #                   for start, end in zip(latent_1, latent_2)]
+        # zs = np.array([[interp[i] for interp in interpolations] for i in range(n)])
+        zs = np.array([np.linspace(start, end, n)
+                       for start, end in zip(latent_1, latent_2)]).T
         xs_reconstructed = self.decode(zs)
 
-        plt.figure((20, 4))
+        plt.figure()
+        #plt.figure(figsize = (n, 4))
         dim = int(self.architecture[0]**0.5)
 
-        for idx in range(1, n+1):
-            ax = plt.subplot(2, n, idx)
+        for idx in range(n):#range(1, n+1):
+            ax = plt.subplot(2, n, idx + 1)
             plt.imshow(xs_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
+
+        if save:
+            title = "{}_latent_{}_round_{}_interpolate.png".format(
+                self.datetime, "_".join(map(str, self.architecture)), self.step)
+            plt.savefig(os.path.join(self.plots_outdir, title))
 
 
 def test_mnist():
