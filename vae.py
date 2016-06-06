@@ -66,13 +66,18 @@ class Dense(Layer):
         self.dropout = dropout # keep_prob
         self.nonlinearity = nonlinearity
 
-    def __call__(self, tensor_in):
-        """Dense layer currying - i.e. to appy specified layer to any input tensor"""
+    def __call__(self, x):
+        """Dense layer currying - i.e. to appy specified layer to any input tensor `x`"""
         # tf.Tensor -> tf.op
         with tf.name_scope(self.scope):
-            w, b = Layer.wbVars(tensor_in.get_shape()[1].value, self.size)
-            w = tf.nn.dropout(w, self.dropout)
-            return self.nonlinearity(tf.matmul(tensor_in, w) + b)
+            # reuse weights if layer already initialized
+            while True:
+                try:
+                    return self.nonlinearity(tf.matmul(x, self.w) + self.b)
+                except(AttributeError):
+                    self.w, self.b = Layer.wbVars(x.get_shape()[1].value, self.size)
+                    self.w = tf.nn.dropout(self.w, self.dropout)
+            # return self.nonlinearity(tf.matmul(tensor_in, w) + b)
 
 
 class VAE():
