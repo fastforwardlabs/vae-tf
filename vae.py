@@ -84,7 +84,7 @@ class VAE():
 
     DEFAULTS = {
         "batch_size": 128,
-        "epsilon_std": 1.,#1E-3,
+        "epsilon_std": 1E-3,#1.
         "learning_rate": 1E-4,
         "dropout": 0.9
     }
@@ -109,9 +109,9 @@ class VAE():
         self.sesh.run(tf.initialize_all_variables())
 
         if save_graph_def:
-            logger = tf.train.SummaryWriter("./log", self.sesh.graph)
-            logger.flush()
-            logger.close()
+            self.logger = tf.train.SummaryWriter("./log", self.sesh.graph)
+            # logger.flush()
+            # logger.close()
 
     @property
     def step(self):
@@ -157,10 +157,10 @@ class VAE():
         # loss
         # reconstruction loss, modeled as Bernoulli (i.e. with binary cross-entropy) / log likelihood
         rec_loss = VAE.crossEntropy(x_reconstructed, x_in)
-        #cross_entropy = print_(cross_entropy, "ce")
+        rec_loss = print_(rec_loss, "ce")
         # Kullback-Leibler divergence: mismatch b/w approximate vs. true posterior
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
-        #kl_loss = print_(kl_loss, "kl")
+        kl_loss = print_(kl_loss, "kl")
         cost = tf.reduce_mean(rec_loss + kl_loss, name="cost")
         #cost = tf.add(rec_loss, kl_loss, name="cost")
         #cost = print_(cost, "cost")
@@ -197,7 +197,7 @@ class VAE():
             return mu + epsilon * tf.exp(log_sigma)
 
     @staticmethod
-    def crossEntropy(observed, actual, offset = 1e-12):
+    def crossEntropy(observed, actual, offset = 1e-10):#45):
         with tf.name_scope("binary_cross_entropy"):
             # bound by clipping to avoid NaN
             obs = tf.clip_by_value(observed, offset, 1 - offset)
@@ -384,12 +384,17 @@ def test_mnist():
     mnist = input_data.read_data_sets("MNIST_data")
 
     vae = VAE()
-    #vae.train(mnist, max_iter=100000, verbose=False)
-    vae.train(mnist, max_iter=4000, verbose=False)
+    #vae.train(mnist, max_iter=10000, verbose=True)
+    vae.train(mnist, max_iter=4000, verbose=True)
 
     vae.plotInLatent(mnist.train.images, mnist.train.labels, name="train")
     vae.exploreLatent(nx=20, ny=20)
-    vae.interpolate(np.random.rand(2), np.random.rand(2))
+
+    mus, sigmas = vae.encode(mnist.test.next_batch(2)[0])
+    vae.interpolate(*mus)#np.random.rand(2), np.random.rand(2))
+
+    vae.logger.flush()
+    vae.logger.close()
 
 if __name__ == "__main__":
     test_mnist()
