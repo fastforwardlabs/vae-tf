@@ -21,7 +21,7 @@ def composeAll(*args):
     # adapted from https://docs.python.org/3.1/howto/functional.html
     return partial(functools.reduce, compose)(*args)
 
-def print_(var, name: str, first_n=5, summarize = 5):
+def print_(var, name: str, first_n=5, summarize=5):
     """Util for debugging by printing values during training"""
     # tf.Print is identity fn with side effect of printing requested [vals]
     try:
@@ -348,36 +348,41 @@ class VAE():
                    (j * dim):((j + 1) * dim)] = x_reconstructed.reshape([dim, dim])
 
         plt.figure(figsize=(8, 10))
-        plt.imshow(canvas, cmap="Greys")
+        plt.imshow(canvas, cmap="Greys", origin="upper")
         plt.tight_layout()
 
-        plt.figure(figsize=(8, 10))
-        plt.imshow(canvas, cmap="Greys")#, origin="upper")
-        #plt.tight_layout()
-
+        plt.show()
         if save:
             title = "{}_latent_{}_round_{}_explore.png".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step)
             plt.savefig(os.path.join(self.plots_outdir, title))
 
-    def interpolate(self, latent_1, latent_2, n=20, save=True):
+    def interpolate(self, latent_1, latent_2, n=20, save=True, name="interpolate"):
         """Interpolate between two points in arbitrary-dimensional latent space"""
         zs = np.array([np.linspace(start, end, n) # interpolate across every z dimension
                        for start, end in zip(latent_1, latent_2)]).T
         xs_reconstructed = self.decode(zs)
 
-        plt.figure() # figsize = (n, 4))
         dim = int(self.architecture[0]**0.5)
 
-        for idx in range(n):
-            ax = plt.subplot(2, n, idx + 1)
-            plt.imshow(xs_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
+        canvas = np.hstack([x_reconstructed.reshape([dim, dim]) for x_reconstructed in xs_reconstructed])
+
+        # canvas = np.empty([dim, dim * n])
+
+        # for idx in range(n):
+        #     #ax = plt.subplot(2, n, idx + 1)
+        #     #plt.imshow(xs_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
+        #     #ax.get_xaxis().set_visible(False)
+        #     #ax.get_yaxis().set_visible(False)
+        #     canvas[:, (idx * dim):(idx + 1) * dim] = (xs_reconstructed[idx]
+        #                                               .reshape([dim, dim]))
+
+        plt.figure() # figsize = (n, 4))
+        plt.imshow(canvas, cmap="Greys")
 
         if save:
-            title = "{}_latent_{}_round_{}_interpolate.png".format(
-                self.datetime, "_".join(map(str, self.architecture)), self.step)
+            title = "{}_latent_{}_round_{}_{}.png".format(
+                self.datetime, "_".join(map(str, self.architecture)), self.step, name)
             plt.savefig(os.path.join(self.plots_outdir, title))
 
 
@@ -387,19 +392,23 @@ def test_mnist():
 
     vae = VAE()
     #vae.train(mnist, max_iter=10000, verbose=True)
-    vae.train(mnist, max_iter=4000, verbose=False)#True)
+    vae.train(mnist, max_iter=1000, verbose=False)#True)
     print("Trained!")
 
     print("Plotting in latent space...")
     vae.plotInLatent(mnist.train.images, mnist.train.labels, name="train")
     vae.plotInLatent(mnist.validation.images, mnist.validation.labels, name="validation")
+    vae.plotInLatent(mnist.test.images, mnist.test.labels, name="test")
 
     print("Exploring latent...")
     vae.exploreLatent(nx=20, ny=20)
 
     print("Interpolating...")
-    mus, sigmas = vae.encode(mnist.test.next_batch(2)[0])
-    vae.interpolate(*mus)
+    imgs, labels = mnist.test.next_batch(100)
+    idxs = np.random.randint(0, imgs.shape[0] - 1, 2)
+    mus, sigmas = vae.encode(np.vstack(imgs[i] for i in idxs))
+    vae.interpolate(*mus, name="interpolate_{}->{}".format(
+        *(labels[i] for i in idxs)))
 
     vae.logger.flush()
     vae.logger.close()
