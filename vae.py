@@ -351,6 +351,10 @@ class VAE():
         plt.imshow(canvas, cmap="Greys")
         plt.tight_layout()
 
+        plt.figure(figsize=(8, 10))
+        plt.imshow(canvas, cmap="Greys")#, origin="upper")
+        #plt.tight_layout()
+
         if save:
             title = "{}_latent_{}_round_{}_explore.png".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step)
@@ -362,8 +366,7 @@ class VAE():
                        for start, end in zip(latent_1, latent_2)]).T
         xs_reconstructed = self.decode(zs)
 
-        plt.figure()
-        #plt.figure(figsize = (n, 4))
+        plt.figure() # figsize = (n, 4))
         dim = int(self.architecture[0]**0.5)
 
         for idx in range(n):
