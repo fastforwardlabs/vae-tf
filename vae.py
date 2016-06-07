@@ -1,11 +1,8 @@
 import datetime
 import functools
-import itertools
 import os
-import sys
 
 from functional import compose, partial
-import matplotlib.cm as cm
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,7 +21,7 @@ def composeAll(*args):
     # adapted from https://docs.python.org/3.1/howto/functional.html
     return partial(functools.reduce, compose)(*args)
 
-def print_(var, name: str, first_n = 10, summarize = 5):
+def print_(var, name: str, first_n=5, summarize = 5):
     """Util for debugging by printing values during training"""
     # tf.Print is identity fn with side effect of printing requested [vals]
     try:
@@ -36,7 +33,7 @@ def print_(var, name: str, first_n = 10, summarize = 5):
 
 class Layer():
     @staticmethod
-    def wbVars(fan_in, fan_out, normal=True):
+    def wbVars(fan_in: int, fan_out: int, normal=True):
         """Helper to initialize weights and biases, via He's adaptation
         of Xavier init for ReLUs: https://arxiv.org/pdf/1502.01852v1.pdf
         (distribution defaults to truncated Normal; else Uniform)
@@ -149,8 +146,7 @@ class VAE():
         # assumes symmetric hidden architecture
         decoding = [Dense("decoding", hidden_size, dropout, tf.nn.elu)
                     for hidden_size in self.architecture[1:-1]]
-        # prepend final reconstruction as outermost fn
-        # restore original dims and squash vals [0, 1]
+        # prepend final reconstruction as outermost fn --> restore original dims, squash outputs [0, 1]
         decoding.insert(0, Dense("x_decoding", self.architecture[0], dropout, tf.nn.sigmoid))
         x_reconstructed = tf.identity(composeAll(decoding)(z), name="x_reconstructed")
 
@@ -158,7 +154,7 @@ class VAE():
         # goal: find variational & generative parameters that best reconstruct x
         # i.e. maximize log likelihood over observed datapoints
         # do this by maximizing (variational) lower bound on each marginal log likelihood
-        # goal: increase (variationl) lower bound on marginal log likelihood
+        # goal: increase (variational) lower bound on marginal log likelihood
         # loss
         # reconstruction loss, modeled as Bernoulli (i.e. with binary cross-entropy) / log likelihood
         rec_loss = VAE.crossEntropy(x_reconstructed, x_in)
@@ -168,7 +164,7 @@ class VAE():
         kl_loss = print_(kl_loss, "kl")
         cost = tf.reduce_mean(rec_loss + kl_loss, name="cost")
         #cost = tf.add(rec_loss, kl_loss, name="cost")
-        #cost = print_(cost, "cost")
+        cost = print_(cost, "cost")
 
         global_step = tf.Variable(0, trainable=False)
         with tf.name_scope("Adam_optimizer"):
@@ -195,27 +191,24 @@ class VAE():
     def sampleGaussian(self, mu, log_sigma):
         """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
         with tf.name_scope("sample_gaussian"):
-            # sampling / reparametrization trick
+            # sampling / reparameterization trick
             epsilon = tf.random_normal(tf.shape(log_sigma), mean=0, stddev=
                                        self.hyperparams['epsilon_std'], # TODO: 1. ?
                                        name="epsilon")
             return mu + epsilon * tf.exp(log_sigma)
 
     @staticmethod
-    def crossEntropy(observed, actual, offset = 1e-10):#45):
-        with tf.name_scope("binary_cross_entropy"):
-            # bound by clipping to avoid NaN
+    def crossEntropy(observed, actual, offset=1e-10):#45):
+        # (tf.Tensor, tf.Tensor, float) -> tf.Tensor
+        with tf.name_scope("cross_entropy"):
+            # bound by clipping to avoid nan
             obs = tf.clip_by_value(observed, offset, 1 - offset)
             return -tf.reduce_sum(actual * tf.log(obs) +
                                   (1 - actual) * tf.log(1 - obs), 1)
 
-            # clip = functools.partial(tf.clip_by_value, clip_value_min=offset,
-            #                          clip_value_max=np.inf)
-            # return -tf.reduce_sum(actual * tf.log(clip(observed)) +
-            #                        (1 - actual) * tf.log(clip(1 - observed)))
-
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
+        # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
             return -0.5 * tf.reduce_sum(1 + log_sigma - mu**2 - tf.exp(log_sigma), 1)
 
@@ -284,14 +277,12 @@ class VAE():
         #for idx in range(1, n+1):
         for idx in range(n):
             # display original
-            #ax = plt.subplot(2, n, idx)
             ax = plt.subplot(2, n, idx + 1) # rows, cols, subplot number from 1
             plt.imshow(x_in[idx].reshape([dim, dim]), cmap="Greys")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             # display reconstruction
-            #ax = plt.subplot(2, n, idx + n)
             ax = plt.subplot(2, n, idx + n + 1)
             plt.imshow(x_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
             ax.get_xaxis().set_visible(False)
@@ -316,7 +307,7 @@ class VAE():
 
         if labels.any():
             classes = set(labels)
-            colormap = cm.rainbow(np.linspace(0, 1, len(classes)))
+            colormap = plt.cm.rainbow(np.linspace(0, 1, len(classes)))
             plt.scatter(xs, ys, alpha=0.8, c=[colormap[i] for i in labels])
 
             # make room for legend
@@ -344,39 +335,21 @@ class VAE():
         dim = int(self.architecture[0]**0.5)
         canvas = np.empty([dim * ny, dim * nx])
 
-        # z_xs = np.linspace(-3, 3, nx)
-        # z_ys = np.linspace(-3, 3, ny)
-        # for i, z_xi in enumerate(z_xs):
-        #     for j, z_yj in enumerate(z_ys):
-        #         x_reconstructed = self.decode([z_xi, z_yj])
-        #         canvas[(nx-i-1) * dim : (nx-i) * dim,
-        #                j * dim : (j+1) * dim] = x_reconstructed.reshape([dim, dim])
-
         # complex number steps act to replace np.linspace
-        #X, Y = np.mgrid[-3:3:nx*1j, -3:3:ny*1j]
-        #for i, j in itertools.product(range(nx), range(ny)):
-            #x_reconstructed = self.decode([[X[i,j], Y[i,j]]])
-            #canvas[(i * dim):((i + 1) * dim),
-                   #(j * dim):((j + 1) * dim)] = x_reconstructed.reshape([dim, dim])
+        zs = np.rollaxis(np.mgrid[-3:3:ny*1j, -3:3:nx*1j], 0, 3) # [nx, ny, 2]
 
-        #yxs = np.mgrid[-3:3:nx*1j, -3:3:ny*1j].ravel(order="F").reshape([ny, nx, 2]) # [ny, nx, 2]
-        xs = np.rollaxis(np.mgrid[-3:3:ny*1j, -3:3:nx*1j], 0, 3) # [nx, ny, 2]
         # for idx in np.ndindex(ny - 1, nx - 1): # row i, col j where row is vertical/Y axis
         #     x_reconstructed = self.decode(xs[idx]
         #canvas = np.array([self.decode(x).reshape([dim, dim]) for x in iter(np.rollaxis(xs, 0, 3))]).reshape([dim * ny, dim * nx])
 
-        for i, j in np.ndindex(xs.shape[:-1]): # row i, col j where row is vertical/Y axis
-            x_reconstructed = self.decode([xs[i, j]]) # TODO: decode all at once ?
+        for i, j in np.ndindex(zs.shape[:-1]):
+            x_reconstructed = self.decode([zs[i, j]]) # TODO: decode all at once ? one row at a time?
             canvas[(i * dim):((i + 1) * dim),
                    (j * dim):((j + 1) * dim)] = x_reconstructed.reshape([dim, dim])
 
-        # for i in xrange(ny - 1):
-        #     canvas[i] =
-
-
         plt.figure(figsize=(8, 10))
-        plt.imshow(canvas, cmap="Greys")#, origin="upper")
-        #plt.tight_layout()
+        plt.imshow(canvas, cmap="Greys")
+        plt.tight_layout()
 
         if save:
             title = "{}_latent_{}_round_{}_explore.png".format(
@@ -385,11 +358,7 @@ class VAE():
 
     def interpolate(self, latent_1, latent_2, n=20, save=True):
         """Interpolate between two points in arbitrary-dimensional latent space"""
-        # TODO
-        # interpolations = [np.linspace(start, end, n)
-        #                   for start, end in zip(latent_1, latent_2)]
-        # zs = np.array([[interp[i] for interp in interpolations] for i in range(n)])
-        zs = np.array([np.linspace(start, end, n)
+        zs = np.array([np.linspace(start, end, n) # interpolate across every z dimension
                        for start, end in zip(latent_1, latent_2)]).T
         xs_reconstructed = self.decode(zs)
 
@@ -397,7 +366,7 @@ class VAE():
         #plt.figure(figsize = (n, 4))
         dim = int(self.architecture[0]**0.5)
 
-        for idx in range(n):#range(1, n+1):
+        for idx in range(n):
             ax = plt.subplot(2, n, idx + 1)
             plt.imshow(xs_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
             ax.get_xaxis().set_visible(False)
@@ -415,13 +384,19 @@ def test_mnist():
 
     vae = VAE()
     #vae.train(mnist, max_iter=10000, verbose=True)
-    vae.train(mnist, max_iter=4000, verbose=True)
+    vae.train(mnist, max_iter=4000, verbose=False)#True)
+    print("Trained!")
 
+    print("Plotting in latent space...")
     vae.plotInLatent(mnist.train.images, mnist.train.labels, name="train")
+    vae.plotInLatent(mnist.validation.images, mnist.validation.labels, name="validation")
+
+    print("Exploring latent...")
     vae.exploreLatent(nx=20, ny=20)
 
+    print("Interpolating...")
     mus, sigmas = vae.encode(mnist.test.next_batch(2)[0])
-    vae.interpolate(*mus)#np.random.rand(2), np.random.rand(2))
+    vae.interpolate(*mus)
 
     vae.logger.flush()
     vae.logger.close()
