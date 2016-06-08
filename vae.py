@@ -90,9 +90,10 @@ class VAE():
         "learning_rate": 1E-4,
         "dropout": 0.9
     }
+    RESTORE_KEY = "to_restore"
 
     def __init__(self, architecture=ARCHITECTURE, d_hyperparams={},
-                 save_graph_def=True, plots_outdir="./png"):
+                 save_graph_def=True, plots_outdir="./png", meta_graph=None):
         # YYMMDD_HHMM
         self.datetime = "".join(c for c in str(datetime.datetime.today())
                                 if c.isdigit() or c.isspace())[2:13].replace(" ", "_")
@@ -102,16 +103,37 @@ class VAE():
         self.hyperparams = VAE.DEFAULTS.copy()
         self.hyperparams.update(**d_hyperparams)
 
-        # handles for tensor ops to feed or fetch
-        (self.x_in, self.dropout, self.z_mean, self.z_log_sigma,
-         self.x_reconstructed, self.z_, self.x_reconstructed_,
-         self.cost, self.global_step, self.train_op) = self._buildGraph()
-
+        tf.reset_default_graph()
         self.sesh = tf.Session()
-        self.sesh.run(tf.initialize_all_variables())
+
+        if not meta_graph:
+            # build graph
+            handles = self._buildGraph()
+            for handle in handles:
+                tf.add_to_collection(VAE.RESTORE_KEY, handle)
+
+            # handles for tensor ops to feed or fetch
+            (self.x_in, self.dropout, self.z_mean, self.z_log_sigma,
+             self.x_reconstructed, self.z_, self.x_reconstructed_,
+             self.cost, self.global_step, self.train_op) = handles
+
+            self.sesh.run(tf.initialize_all_variables())
+
+        else:
+            # rebuild graph
+            meta_graph = os.path.abspath(meta_graph)
+            tf.train.import_meta_graph(meta_graph + ".meta").restore(
+                self.sesh, meta_graph)
+
+            # restore handles for tensor ops to feed or fetch
+            (self.x_in, self.dropout, self.z_mean, self.z_log_sigma,
+             self.x_reconstructed, self.z_, self.x_reconstructed_,
+             self.cost, self.global_step, self.train_op) = (
+                 self.sesh.graph.get_collection(VAE.RESTORE_KEY))
 
         if save_graph_def:
             self.logger = tf.train.SummaryWriter("./log", self.sesh.graph)
+
             # logger.flush()
             # logger.close()
 
@@ -229,7 +251,11 @@ class VAE():
         # np.array -> np.array
         return self.decode(self.sesh.run(self.sampleGaussian(*self.encode(x))))
 
-    def train(self, X, max_iter=np.inf, max_epochs=np.inf, cross_validate=True, verbose=True):
+    def train(self, X, max_iter=np.inf, max_epochs=np.inf, cross_validate=True, verbose=True,
+              save=False, outdir="./out"):
+        if save:
+            saver = tf.train.Saver(tf.all_variables())
+
         try:
             err_train = 0
             #err_cv = 0
@@ -260,11 +286,19 @@ class VAE():
                         self.plotSubset(x, x_reconstructed, n=10, name="cv")
 
                 if i >= max_iter or X.train.epochs_completed >= max_epochs:
-                    print("final cost: ", cost)
                     break
 
         except(KeyboardInterrupt):
-            return
+            pass
+
+        finally:
+            print("final cost (@ step {} = epoch {}): ".format(
+                self.step, X.train.epochs_completed, cost))
+            if save:
+                outfile = os.path.join(os.path.abspath(outdir), "{}_vae_{}".format(
+                    self.datetime, "_".join(map(str, self.architecture))))
+                saver.save(self.sesh, outfile, global_step=self.step)
+                #tf.train.export_meta_graph(filename=outfile)
 
     def plotSubset(self, x_in, x_reconstructed, n=10, save=True, name="subset"):
         """Util to plot subset of inputs and reconstructed outputs"""
