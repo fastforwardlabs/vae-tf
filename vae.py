@@ -435,32 +435,46 @@ def load_mnist():
     from tensorflow.examples.tutorials.mnist import input_data
     return input_data.read_data_sets("MNIST_data")
 
-def test_mnist():
-    mnist = load_mnist()
+def all_plots(vae, mnist=None):
+    if not mnist:
+        mnist = load_mnist()
 
-    vae = VAE()
-    #vae.train(mnist, max_iter=10000, verbose=True)
-    vae.train(mnist, max_iter=1000, verbose=False, save=True)
-    vae.logger.flush(); vae.logger.close()
-    print("Trained!")
-
-    all_plots(vae, mnist)
-
-def all_plots(vae, mnist):
     print("Plotting in latent space...")
+    plot_all_in_latent(vae, mnist)
+    print("Exploring latent...")
+    vae.exploreLatent(nx=20, ny=20, range_=(-3, 3))
+    print("Interpolating...")
+    interpolate_digits(vae, mnist)
+
+def plot_all_in_latent(vae, mnist=None):
+    if not mnist:
+        mnist = load_mnist()
     vae.plotInLatent(mnist.train.images, mnist.train.labels, name="train")
     vae.plotInLatent(mnist.validation.images, mnist.validation.labels, name="validation")
     vae.plotInLatent(mnist.test.images, mnist.test.labels, name="test")
 
-    print("Exploring latent...")
-    vae.exploreLatent(nx=20, ny=20)
-
-    print("Interpolating...")
+def interpolate_digits(vae, mnist=None):
+    if not mnist:
+        mnist = load_mnist()
     imgs, labels = mnist.test.next_batch(100)
     idxs = np.random.randint(0, imgs.shape[0] - 1, 2)
-    mus, sigmas = vae.encode(np.vstack(imgs[i] for i in idxs))
+    mus, _ = vae.encode(np.vstack(imgs[i] for i in idxs))
     vae.interpolate(*mus, name="interpolate_{}->{}".format(
         *(labels[i] for i in idxs)))
+
+def test_mnist():
+    mnist = load_mnist()
+    vae = VAE()
+    vae.train(mnist, max_epochs=200, verbose=False, save=True)
+    #vae.train(mnist, max_iter=1000, verbose=False, save=True)
+    print("Trained!")
+    all_plots(vae, mnist)
+
+def reload(meta_graph):
+    vae = VAE(meta_graph=meta_graph)
+    print("Loaded!")
+    all_plots(vae)
+
 
 if __name__ == "__main__":
     test_mnist()
