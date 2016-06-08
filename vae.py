@@ -309,10 +309,9 @@ class VAE():
         # assume square images
         dim = int(self.architecture[0]**0.5)
 
-        #for idx in range(1, n+1):
         for idx in range(n):
             # display original
-            ax = plt.subplot(2, n, idx + 1) # rows, cols, subplot number from 1
+            ax = plt.subplot(2, n, idx + 1) # rows, cols, subplot numbered from 1
             plt.imshow(x_in[idx].reshape([dim, dim]), cmap="Greys")
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
@@ -323,29 +322,29 @@ class VAE():
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
+        plt.show()
         if save:
-            title = "{}_vae_{}_round_{}_{}.png".format(
+            title = "{}_batch_{}_round_{}_{}".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
             plt.savefig(os.path.join(self.plots_outdir, title))
-
-        plt.show()
 
     def plotInLatent(self, x_in, labels=np.array([]), save=True, name="data"):
         """Util to plot points in 2-D latent space"""
         assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
-        mus, log_sigmas = self.encode(x_in)
+        mus, _ = self.encode(x_in)
         ys, xs = mus.T
 
         plt.figure()
         plt.title("round {}: {} in latent space".format(self.step, name))
-        ax = plt.subplot(111)
+        kwargs = {'alpha': 0.8}
 
         if labels.any():
             classes = set(labels)
             colormap = plt.cm.rainbow(np.linspace(0, 1, len(classes)))
-            plt.scatter(xs, ys, alpha=0.8, c=[colormap[i] for i in labels])
+            kwargs['c'] = [colormap[i] for i in labels]
 
             # make room for legend
+            ax = plt.subplot(111)
             box = ax.get_position()
             ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
             handles = [mpatches.Circle((0,0), label=class_, color=colormap[i])
@@ -353,12 +352,11 @@ class VAE():
             ax.legend(handles=handles, shadow=True, bbox_to_anchor=(1.05, 0.45),
                       fancybox=True, loc='center left')
 
-        else:
-            plt.scatter(xs, ys, alpha=0.8)
+        plt.scatter(xs, ys, **kwargs)
 
         plt.show()
         if save:
-            title = "{}_latent_{}_round_{}_{}.png".format(
+            title = "{}_latent_{}_round_{}_{}".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
             plt.savefig(os.path.join(self.plots_outdir, title))
 
