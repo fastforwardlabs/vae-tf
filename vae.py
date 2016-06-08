@@ -12,7 +12,7 @@ import tensorflow as tf
 # TODO: prettytensor ?
 ARCHITECTURE = [784, # MNIST = 28*28
                 #128, # intermediate encoding
-                500, #500,
+                500, 500,
                 2] # latent space dims
 # (and symmetrically back out again)
 
@@ -42,8 +42,8 @@ class Layer():
         stddev = tf.cast((2 / fan_in)**0.5, tf.float32)
 
         initial_w = (
-            #tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal else
-            tf.random_normal([fan_in, fan_out], stddev=stddev) if normal else
+            tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal else
+            #tf.random_normal([fan_in, fan_out], stddev=stddev) if normal else
             tf.random_uniform([fan_in, fan_out], -stddev, stddev) # (range therefore not truly stddev)
         )
         initial_b = tf.zeros([fan_out])
@@ -67,14 +67,13 @@ class Dense(Layer):
         """Dense layer currying - i.e. to appy specified layer to any input tensor `x`"""
         # tf.Tensor -> tf.op
         with tf.name_scope(self.scope):
-            # reuse weights if layer already initialized
             while True:
                 try:
+                    # reuse weights if layer already initialized
                     return self.nonlinearity(tf.matmul(x, self.w) + self.b)
                 except(AttributeError):
                     self.w, self.b = Layer.wbVars(x.get_shape()[1].value, self.size)
                     self.w = tf.nn.dropout(self.w, self.dropout)
-            # return self.nonlinearity(tf.matmul(tensor_in, w) + b)
 
 
 class VAE():
@@ -121,6 +120,7 @@ class VAE():
 
         else:
             # rebuild graph
+            self.datetime = "{}_reloaded".format(os.path.basename(meta_graph)[:11])
             meta_graph = os.path.abspath(meta_graph)
             tf.train.import_meta_graph(meta_graph + ".meta").restore(
                 self.sesh, meta_graph)
@@ -133,9 +133,6 @@ class VAE():
 
         if save_graph_def:
             self.logger = tf.train.SummaryWriter("./log", self.sesh.graph)
-
-            # logger.flush()
-            # logger.close()
 
     @property
     def step(self):
@@ -214,8 +211,8 @@ class VAE():
         """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
         with tf.name_scope("sample_gaussian"):
             # sampling / reparameterization trick
-            epsilon = tf.random_normal(tf.shape(log_sigma), mean=0, stddev=
-                                       self.hyperparams['epsilon_std'], # TODO: 1. ?
+            epsilon = tf.random_normal(tf.shape(log_sigma), mean=0,
+                                       stddev=self.hyperparams['epsilon_std'],
                                        name="epsilon")
             return mu + epsilon * tf.exp(log_sigma)
 
@@ -251,8 +248,8 @@ class VAE():
         # np.array -> np.array
         return self.decode(self.sesh.run(self.sampleGaussian(*self.encode(x))))
 
-    def train(self, X, max_iter=np.inf, max_epochs=np.inf, cross_validate=True, verbose=True,
-              save=False, outdir="./out"):
+    def train(self, X, max_iter=np.inf, max_epochs=np.inf, cross_validate=True,
+              verbose=True, save=False, outdir="./out"):
         if save:
             saver = tf.train.Saver(tf.all_variables())
 
@@ -260,7 +257,7 @@ class VAE():
             err_train = 0
             #err_cv = 0
             while True:
-                x, labels = X.train.next_batch(self.hyperparams["batch_size"])
+                x, _ = X.train.next_batch(self.hyperparams["batch_size"])
                 feed_dict = {self.x_in: x,
                              self.dropout: self.hyperparams["dropout"]}
                 fetches = [self.x_reconstructed, self.cost, self.global_step, self.train_op]
@@ -275,7 +272,7 @@ class VAE():
                     self.plotSubset(x, x_reconstructed, n=10, name="train")
 
                     if cross_validate:
-                        x, labels = X.validation.next_batch(self.hyperparams["batch_size"])
+                        x, _ = X.validation.next_batch(self.hyperparams["batch_size"])
                         feed_dict = {self.x_in: x}
                         fetches = [self.x_reconstructed, self.cost]
                         x_reconstructed, cost = self.sesh.run(fetches, feed_dict)
@@ -292,13 +289,17 @@ class VAE():
             pass
 
         finally:
-            print("final cost (@ step {} = epoch {}): ".format(
-                self.step, X.train.epochs_completed, cost))
+            print("final avg cost (@ step {} = epoch {}): ".format(
+                i, X.train.epochs_completed, err_train / i))
             if save:
                 outfile = os.path.join(os.path.abspath(outdir), "{}_vae_{}".format(
                     self.datetime, "_".join(map(str, self.architecture))))
                 saver.save(self.sesh, outfile, global_step=self.step)
-                #tf.train.export_meta_graph(filename=outfile)
+            try:
+                self.logger.flush()
+                self.logger.close()
+            except(AttributeError):
+                return
 
     def plotSubset(self, x_in, x_reconstructed, n=10, save=True, name="subset"):
         """Util to plot subset of inputs and reconstructed outputs"""
