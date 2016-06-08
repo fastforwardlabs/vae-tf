@@ -369,8 +369,10 @@ class VAE():
         dim = int(self.architecture[0]**0.5)
         canvas = np.empty([dim * ny, dim * nx])
 
-        # complex number steps act to replace np.linspace
-        zs = np.rollaxis(np.mgrid[-3:3:ny*1j, -3:3:nx*1j], 0, 3) # [nx, ny, 2]
+        # complex number steps act like np.linspace
+        # row, col indices (i, j) correspond to graph coords (y, x)
+        # rollaxis enables iteration over latent space 2-tuples
+        zs = np.rollaxis(np.mgrid[3:-3:ny*1j, -3:3:nx*1j], 0, 3)
 
         # for idx in np.ndindex(ny - 1, nx - 1): # row i, col j where row is vertical/Y axis
         #     x_reconstructed = self.decode(xs[idx]
@@ -413,6 +415,11 @@ class VAE():
 
         plt.figure() # figsize = (n, 4))
         plt.imshow(canvas, cmap="Greys")
+        plt.tight_layout()
+
+        ax = plt.subplot('111')
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
 
         if save:
             title = "{}_latent_{}_round_{}_{}.png".format(
@@ -420,15 +427,22 @@ class VAE():
             plt.savefig(os.path.join(self.plots_outdir, title))
 
 
-def test_mnist():
+def load_mnist():
     from tensorflow.examples.tutorials.mnist import input_data
-    mnist = input_data.read_data_sets("MNIST_data")
+    return input_data.read_data_sets("MNIST_data")
+
+def test_mnist():
+    mnist = load_mnist()
 
     vae = VAE()
     #vae.train(mnist, max_iter=10000, verbose=True)
-    vae.train(mnist, max_iter=1000, verbose=False)#True)
+    vae.train(mnist, max_iter=1000, verbose=False, save=True)
+    vae.logger.flush(); vae.logger.close()
     print("Trained!")
 
+    all_plots(vae, mnist)
+
+def all_plots(vae, mnist):
     print("Plotting in latent space...")
     vae.plotInLatent(mnist.train.images, mnist.train.labels, name="train")
     vae.plotInLatent(mnist.validation.images, mnist.validation.labels, name="validation")
@@ -443,9 +457,6 @@ def test_mnist():
     mus, sigmas = vae.encode(np.vstack(imgs[i] for i in idxs))
     vae.interpolate(*mus, name="interpolate_{}->{}".format(
         *(labels[i] for i in idxs)))
-
-    vae.logger.flush()
-    vae.logger.close()
 
 if __name__ == "__main__":
     test_mnist()
