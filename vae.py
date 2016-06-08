@@ -406,11 +406,9 @@ class VAE():
         xs_reconstructed = self.decode(zs)
 
         dim = int(self.architecture[0]**0.5)
-
-        canvas = np.hstack([x_reconstructed.reshape([dim, dim]) for x_reconstructed in xs_reconstructed])
+        canvas = np.hstack([x.reshape([dim, dim]) for x in xs_reconstructed])
 
         # canvas = np.empty([dim, dim * n])
-
         # for idx in range(n):
         #     #ax = plt.subplot(2, n, idx + 1)
         #     #plt.imshow(xs_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
@@ -419,16 +417,16 @@ class VAE():
         #     canvas[:, (idx * dim):(idx + 1) * dim] = (xs_reconstructed[idx]
         #                                               .reshape([dim, dim]))
 
-        plt.figure() # figsize = (n, 4))
+        plt.figure(figsize = (n, 2))
         plt.imshow(canvas, cmap="Greys")
         plt.tight_layout()
 
-        ax = plt.subplot('111')
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
+        # ax = plt.subplot('111')
+        # ax.get_xaxis().set_visible(False)
+        #ax.get_yaxis().set_visible(False)
 
         if save:
-            title = "{}_latent_{}_round_{}_{}.png".format(
+            title = "{}_latent_{}_round_{}_{}".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
             plt.savefig(os.path.join(self.plots_outdir, title))
 
