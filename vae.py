@@ -360,35 +360,42 @@ class VAE():
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
             plt.savefig(os.path.join(self.plots_outdir, title))
 
-    def exploreLatent(self, nx = 20, ny = 20, save=True):
+    def exploreLatent(self, nx=20, ny=20, range_=(-3, 3), save=True):
         """Util to explore low-dimensional manifold of latent space"""
         assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
 
         # inspired by https://jmetzen.github.io/2015-11-27/vae.html
         dim = int(self.architecture[0]**0.5)
-        canvas = np.empty([dim * ny, dim * nx])
+        min_, max_ = range_
 
         # complex number steps act like np.linspace
         # row, col indices (i, j) correspond to graph coords (y, x)
         # rollaxis enables iteration over latent space 2-tuples
-        zs = np.rollaxis(np.mgrid[3:-3:ny*1j, -3:3:nx*1j], 0, 3)
+        zs = np.rollaxis(np.mgrid[max_:min_:ny*1j, min_:max_:nx*1j], 0, 3)
 
+        # canvas = np.vstack([np.hstack([self.decode(z).reshape([dim, dim])
+        #                               for z in z_row]) for z_row in iter(zs)])
+        canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
+                                       self.decode(z_row)]) for z_row in iter(zs)])
+
+        #canvas = np.empty([dim * ny, dim * nx])
         # for idx in np.ndindex(ny - 1, nx - 1): # row i, col j where row is vertical/Y axis
         #     x_reconstructed = self.decode(xs[idx]
         #canvas = np.array([self.decode(x).reshape([dim, dim]) for x in iter(np.rollaxis(xs, 0, 3))]).reshape([dim * ny, dim * nx])
 
-        for i, j in np.ndindex(zs.shape[:-1]):
-            x_reconstructed = self.decode([zs[i, j]]) # TODO: decode all at once ? one row at a time?
-            canvas[(i * dim):((i + 1) * dim),
-                   (j * dim):((j + 1) * dim)] = x_reconstructed.reshape([dim, dim])
+        # for i, j in np.ndindex(zs.shape[:-1]):
+        #     x_reconstructed = self.decode([zs[i, j]]) # TODO: decode all at once ? one row at a time?
+        #     canvas[(i * dim):((i + 1) * dim),
+        #            (j * dim):((j + 1) * dim)] = x_reconstructed.reshape([dim, dim])
 
-        plt.figure(figsize=(8, 10))
-        plt.imshow(canvas, cmap="Greys", origin="upper")
+
+        plt.figure(figsize=(10, 10))
+        plt.imshow(canvas, cmap="Greys", aspect="auto", extent=(range_ * 2))
         plt.tight_layout()
 
         plt.show()
         if save:
-            title = "{}_latent_{}_round_{}_explore.png".format(
+            title = "{}_latent_{}_round_{}_explore".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step)
             plt.savefig(os.path.join(self.plots_outdir, title))
 
