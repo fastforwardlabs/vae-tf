@@ -326,7 +326,7 @@ class VAE():
         if save:
             title = "{}_batch_{}_round_{}_{}".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
-            plt.savefig(os.path.join(self.plots_outdir, title))
+            plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
 
     def plotInLatent(self, x_in, labels=np.array([]), save=True, name="data"):
         """Util to plot points in 2-D latent space"""
@@ -358,13 +358,12 @@ class VAE():
         if save:
             title = "{}_latent_{}_round_{}_{}".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
-            plt.savefig(os.path.join(self.plots_outdir, title))
+            plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
 
     def exploreLatent(self, nx=20, ny=20, range_=(-3, 3), save=True):
         """Util to explore low-dimensional manifold of latent space"""
         assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
 
-        # inspired by https://jmetzen.github.io/2015-11-27/vae.html
         dim = int(self.architecture[0]**0.5)
         min_, max_ = range_
 
@@ -372,24 +371,11 @@ class VAE():
         # row, col indices (i, j) correspond to graph coords (y, x)
         # rollaxis enables iteration over latent space 2-tuples
         zs = np.rollaxis(np.mgrid[max_:min_:ny*1j, min_:max_:nx*1j], 0, 3)
-
-        # canvas = np.vstack([np.hstack([self.decode(z).reshape([dim, dim])
-        #                               for z in z_row]) for z_row in iter(zs)])
         canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
                                        self.decode(z_row)]) for z_row in iter(zs)])
 
-        #canvas = np.empty([dim * ny, dim * nx])
-        # for idx in np.ndindex(ny - 1, nx - 1): # row i, col j where row is vertical/Y axis
-        #     x_reconstructed = self.decode(xs[idx]
-        #canvas = np.array([self.decode(x).reshape([dim, dim]) for x in iter(np.rollaxis(xs, 0, 3))]).reshape([dim * ny, dim * nx])
-
-        # for i, j in np.ndindex(zs.shape[:-1]):
-        #     x_reconstructed = self.decode([zs[i, j]]) # TODO: decode all at once ? one row at a time?
-        #     canvas[(i * dim):((i + 1) * dim),
-        #            (j * dim):((j + 1) * dim)] = x_reconstructed.reshape([dim, dim])
-
-
         plt.figure(figsize=(10, 10))
+        # `extent` sets axis labels corresponding to latent space coords
         plt.imshow(canvas, cmap="Greys", aspect="auto", extent=(range_ * 2))
         plt.tight_layout()
 
@@ -397,10 +383,10 @@ class VAE():
         if save:
             title = "{}_latent_{}_round_{}_explore".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step)
-            plt.savefig(os.path.join(self.plots_outdir, title))
+            plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
 
     def interpolate(self, latent_1, latent_2, n=20, save=True, name="interpolate"):
-        """Interpolate between two points in arbitrary-dimensional latent space"""
+        """Util to interpolate between two points in n-dimensional latent space"""
         zs = np.array([np.linspace(start, end, n) # interpolate across every z dimension
                        for start, end in zip(latent_1, latent_2)]).T
         xs_reconstructed = self.decode(zs)
@@ -408,27 +394,16 @@ class VAE():
         dim = int(self.architecture[0]**0.5)
         canvas = np.hstack([x.reshape([dim, dim]) for x in xs_reconstructed])
 
-        # canvas = np.empty([dim, dim * n])
-        # for idx in range(n):
-        #     #ax = plt.subplot(2, n, idx + 1)
-        #     #plt.imshow(xs_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
-        #     #ax.get_xaxis().set_visible(False)
-        #     #ax.get_yaxis().set_visible(False)
-        #     canvas[:, (idx * dim):(idx + 1) * dim] = (xs_reconstructed[idx]
-        #                                               .reshape([dim, dim]))
-
         plt.figure(figsize = (n, 2))
         plt.imshow(canvas, cmap="Greys")
+        plt.axis("off")
         plt.tight_layout()
 
-        # ax = plt.subplot('111')
-        # ax.get_xaxis().set_visible(False)
-        #ax.get_yaxis().set_visible(False)
-
+        plt.show()
         if save:
             title = "{}_latent_{}_round_{}_{}".format(
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
-            plt.savefig(os.path.join(self.plots_outdir, title))
+            plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
 
 
 def load_mnist():
@@ -466,7 +441,6 @@ def test_mnist():
     mnist = load_mnist()
     vae = VAE()
     vae.train(mnist, max_epochs=200, verbose=False, save=True)
-    #vae.train(mnist, max_iter=1000, verbose=False, save=True)
     print("Trained!")
     all_plots(vae, mnist)
 
