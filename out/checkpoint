@@ -1,2 +1,2 @@
-model_checkpoint_path: "/home/miriam/vae-tf/160607_1832_vae_784_500_2-1000"
-all_model_checkpoint_paths: "/home/miriam/vae-tf/160607_1832_vae_784_500_2-1000"
+model_checkpoint_path: "/home/miriam/vae-tf/out/160608_1425_vae_784_500_500_2-85801"
+all_model_checkpoint_paths: "/home/miriam/vae-tf/out/160608_1425_vae_784_500_500_2-85801"
