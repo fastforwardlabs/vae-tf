@@ -5,6 +5,7 @@ import os
 from functional import compose, partial
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import moviepy.editor as movie
 import numpy as np
 import tensorflow as tf
 
@@ -405,6 +406,46 @@ class VAE():
                 self.datetime, "_".join(map(str, self.architecture)), self.step, name)
             plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
 
+    def randomWalk(self, starting_pt=np.array([]), step_size=20, steps_till_turn=10, save=True, name="random_walk"):
+        # TODO: random walk gif in latent space!
+        dim = int(self.architecture[0]**0.5)
+
+        def iterWalk(start):
+            """Yield points on random walk"""
+            def step():
+                """Equally sized step in random direction"""
+                # random normal in each dimension
+                direction = np.random.randn(starting_pt.size)
+                return step_size * (direction / np.linalg.norm(direction))
+
+            here = start
+            yield here
+            while True:
+                next_step = step()
+                for i in range(steps_till_turn):
+                    here += next_step
+                    yield here
+
+        if not starting_pt.any():
+            # if not specified, pick randomly from latent space
+            starting_pt = 4 * np.random.randn(self.architecture[-1])
+        walk = iterWalk(starting_pt)
+
+        def to_rgb(im):
+            # c/o http://www.socouldanyone.com/2013/03/converting-grayscale-to-rgb-with-numpy.html
+            return np.dstack([im.astype(np.uint8)] * 3)
+
+        def make_frame(t):
+            z = next(walk)
+            x_reconstructed = self.decode([z]).reshape([dim, dim])
+            return to_rgb(x_reconstructed)
+        # TODO: recursive ?
+
+        clip = movie.VideoClip(make_frame, duration=30)
+        #clip.write_videofile("./movie.mp4", fps=10)
+        return clip
+
+
 
 def load_mnist():
     from tensorflow.examples.tutorials.mnist import input_data
@@ -444,11 +485,13 @@ def test_mnist():
     print("Trained!")
     all_plots(vae, mnist)
 
-def reload(meta_graph):
+def reload(meta_graph="./out/160608_1414_vae_784_500_500_2-20164"):
     vae = VAE(meta_graph=meta_graph)
     print("Loaded!")
-    all_plots(vae)
+    vae.randomWalk()
+    #all_plots(vae)
 
 
 if __name__ == "__main__":
-    test_mnist()
+    #test_mnist()
+    reload()
