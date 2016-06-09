@@ -6,3 +6,4 @@ imgs
 log
 png
 __pycache__
+*ipynb*
