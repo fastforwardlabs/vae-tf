@@ -3,11 +3,10 @@ import functools
 import os
 
 from functional import compose, partial
-import matplotlib.patches as mpatches
-import matplotlib.pyplot as plt
-import moviepy.editor as movie
 import numpy as np
 import tensorflow as tf
+
+import plot
 
 
 # TODO: prettytensor ?
@@ -271,7 +270,7 @@ class VAE():
                     print("round {} --> avg cost: ".format(i), err_train / i)
 
                 if i%2000 == 0 and verbose:
-                    self.plotSubset(x, x_reconstructed, n=10, name="train")
+                    plot.plotSubset(self, x, x_reconstructed, n=10, name="train")
 
                     if cross_validate:
                         x, _ = X.validation.next_batch(self.hyperparams["batch_size"])
@@ -282,7 +281,7 @@ class VAE():
                         #err_cv += cost
                         print("round {} --> CV cost: ".format(i), cost)
 
-                        self.plotSubset(x, x_reconstructed, n=10, name="cv")
+                        plot.plotSubset(self, x, x_reconstructed, n=10, name="cv")
 
                 if i >= max_iter or X.train.epochs_completed >= max_epochs:
                     break
@@ -302,197 +301,3 @@ class VAE():
                 self.logger.close()
             except(AttributeError):
                 return
-
-    def plotSubset(self, x_in, x_reconstructed, n=10, save=True, name="subset"):
-        """Util to plot subset of inputs and reconstructed outputs"""
-        n = min(n, x_in.shape[0])
-        plt.figure(figsize = (n * 2, 4))
-        plt.title("round {}: {}".format(self.step, name))
-        # assume square images
-        dim = int(self.architecture[0]**0.5)
-
-        for idx in range(n):
-            # display original
-            ax = plt.subplot(2, n, idx + 1) # rows, cols, subplot numbered from 1
-            plt.imshow(x_in[idx].reshape([dim, dim]), cmap="Greys")
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-
-            # display reconstruction
-            ax = plt.subplot(2, n, idx + n + 1)
-            plt.imshow(x_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-
-        plt.show()
-        if save:
-            title = "{}_batch_{}_round_{}_{}".format(
-                self.datetime, "_".join(map(str, self.architecture)), self.step, name)
-            plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
-
-    def plotInLatent(self, x_in, labels=np.array([]), save=True, name="data"):
-        """Util to plot points in 2-D latent space"""
-        assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
-        mus, _ = self.encode(x_in)
-        ys, xs = mus.T
-
-        plt.figure()
-        plt.title("round {}: {} in latent space".format(self.step, name))
-        kwargs = {'alpha': 0.8}
-
-        if labels.any():
-            classes = set(labels)
-            colormap = plt.cm.rainbow(np.linspace(0, 1, len(classes)))
-            kwargs['c'] = [colormap[i] for i in labels]
-
-            # make room for legend
-            ax = plt.subplot(111)
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-            handles = [mpatches.Circle((0,0), label=class_, color=colormap[i])
-                       for i, class_ in enumerate(classes)]
-            ax.legend(handles=handles, shadow=True, bbox_to_anchor=(1.05, 0.45),
-                      fancybox=True, loc='center left')
-
-        plt.scatter(xs, ys, **kwargs)
-
-        plt.show()
-        if save:
-            title = "{}_latent_{}_round_{}_{}".format(
-                self.datetime, "_".join(map(str, self.architecture)), self.step, name)
-            plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
-
-    def exploreLatent(self, nx=20, ny=20, range_=(-3, 3), save=True):
-        """Util to explore low-dimensional manifold of latent space"""
-        assert self.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
-
-        dim = int(self.architecture[0]**0.5)
-        min_, max_ = range_
-
-        # complex number steps act like np.linspace
-        # row, col indices (i, j) correspond to graph coords (y, x)
-        # rollaxis enables iteration over latent space 2-tuples
-        zs = np.rollaxis(np.mgrid[max_:min_:ny*1j, min_:max_:nx*1j], 0, 3)
-        canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
-                                       self.decode(z_row)]) for z_row in iter(zs)])
-
-        plt.figure(figsize=(10, 10))
-        # `extent` sets axis labels corresponding to latent space coords
-        plt.imshow(canvas, cmap="Greys", aspect="auto", extent=(range_ * 2))
-        plt.tight_layout()
-
-        plt.show()
-        if save:
-            title = "{}_latent_{}_round_{}_explore".format(
-                self.datetime, "_".join(map(str, self.architecture)), self.step)
-            plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
-
-    def interpolate(self, latent_1, latent_2, n=20, save=True, name="interpolate"):
-        """Util to interpolate between two points in n-dimensional latent space"""
-        zs = np.array([np.linspace(start, end, n) # interpolate across every z dimension
-                       for start, end in zip(latent_1, latent_2)]).T
-        xs_reconstructed = self.decode(zs)
-
-        dim = int(self.architecture[0]**0.5)
-        canvas = np.hstack([x.reshape([dim, dim]) for x in xs_reconstructed])
-
-        plt.figure(figsize = (n, 2))
-        plt.imshow(canvas, cmap="Greys")
-        plt.axis("off")
-        plt.tight_layout()
-
-        plt.show()
-        if save:
-            title = "{}_latent_{}_round_{}_{}".format(
-                self.datetime, "_".join(map(str, self.architecture)), self.step, name)
-            plt.savefig(os.path.join(self.plots_outdir, title), bbox_inches="tight")
-
-    def randomWalk(self, starting_pt=np.array([]), step_size=20, steps_till_turn=10, save=True, name="random_walk"):
-        # TODO: random walk gif in latent space!
-        dim = int(self.architecture[0]**0.5)
-
-        def iterWalk(start):
-            """Yield points on random walk"""
-            def step():
-                """Equally sized step in random direction"""
-                # random normal in each dimension
-                direction = np.random.randn(starting_pt.size)
-                return step_size * (direction / np.linalg.norm(direction))
-
-            here = start
-            yield here
-            while True:
-                next_step = step()
-                for i in range(steps_till_turn):
-                    here += next_step
-                    yield here
-
-        if not starting_pt.any():
-            # if not specified, pick randomly from latent space
-            starting_pt = 4 * np.random.randn(self.architecture[-1])
-        walk = iterWalk(starting_pt)
-
-        def to_rgb(im):
-            # c/o http://www.socouldanyone.com/2013/03/converting-grayscale-to-rgb-with-numpy.html
-            return np.dstack([im.astype(np.uint8)] * 3)
-
-        def make_frame(t):
-            z = next(walk)
-            x_reconstructed = self.decode([z]).reshape([dim, dim])
-            return to_rgb(x_reconstructed)
-        # TODO: recursive ?
-
-        clip = movie.VideoClip(make_frame, duration=30)
-        #clip.write_videofile("./movie.mp4", fps=10)
-        return clip
-
-
-
-def load_mnist():
-    from tensorflow.examples.tutorials.mnist import input_data
-    return input_data.read_data_sets("MNIST_data")
-
-def all_plots(vae, mnist=None):
-    if not mnist:
-        mnist = load_mnist()
-
-    print("Plotting in latent space...")
-    plot_all_in_latent(vae, mnist)
-    print("Exploring latent...")
-    vae.exploreLatent(nx=20, ny=20, range_=(-3, 3))
-    print("Interpolating...")
-    interpolate_digits(vae, mnist)
-
-def plot_all_in_latent(vae, mnist=None):
-    if not mnist:
-        mnist = load_mnist()
-    vae.plotInLatent(mnist.train.images, mnist.train.labels, name="train")
-    vae.plotInLatent(mnist.validation.images, mnist.validation.labels, name="validation")
-    vae.plotInLatent(mnist.test.images, mnist.test.labels, name="test")
-
-def interpolate_digits(vae, mnist=None):
-    if not mnist:
-        mnist = load_mnist()
-    imgs, labels = mnist.test.next_batch(100)
-    idxs = np.random.randint(0, imgs.shape[0] - 1, 2)
-    mus, _ = vae.encode(np.vstack(imgs[i] for i in idxs))
-    vae.interpolate(*mus, name="interpolate_{}->{}".format(
-        *(labels[i] for i in idxs)))
-
-def test_mnist():
-    mnist = load_mnist()
-    vae = VAE()
-    vae.train(mnist, max_epochs=200, verbose=False, save=True)
-    print("Trained!")
-    all_plots(vae, mnist)
-
-def reload(meta_graph="./out/160608_1414_vae_784_500_500_2-20164"):
-    vae = VAE(meta_graph=meta_graph)
-    print("Loaded!")
-    vae.randomWalk()
-    #all_plots(vae)
-
-
-if __name__ == "__main__":
-    #test_mnist()
-    reload()

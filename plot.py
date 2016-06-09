@@ -1,0 +1,151 @@
+import os
+
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
+import moviepy.editor as movie
+import numpy as np
+
+PLOTS_OUTDIR = "./png"
+
+def plotSubset(model, x_in, x_reconstructed, n=10, save=True, name="subset", outdir=PLOTS_OUTDIR):
+    """Util to plot subset of inputs and reconstructed outputs"""
+    n = min(n, x_in.shape[0])
+    plt.figure(figsize = (n * 2, 4))
+    plt.title("round {}: {}".format(model.step, name))
+    # assume square images
+    dim = int(model.architecture[0]**0.5)
+
+    for idx in range(n):
+        # display original
+        ax = plt.subplot(2, n, idx + 1) # rows, cols, subplot numbered from 1
+        plt.imshow(x_in[idx].reshape([dim, dim]), cmap="Greys")
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+        # display reconstruction
+        ax = plt.subplot(2, n, idx + n + 1)
+        plt.imshow(x_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+    plt.show()
+    if save:
+        title = "{}_batch_{}_round_{}_{}".format(
+            model.datetime, "_".join(map(str, model.architecture)), model.step, name)
+        plt.savefig(os.path.join(model.plots_outdir, title), bbox_inches="tight")
+
+def plotInLatent(model, x_in, labels=np.array([]), save=True, name="data", outdir=PLOTS_OUTDIR):
+    """Util to plot points in 2-D latent space"""
+    assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
+    mus, _ = model.encode(x_in)
+    ys, xs = mus.T
+
+    plt.figure()
+    plt.title("round {}: {} in latent space".format(model.step, name))
+    kwargs = {'alpha': 0.8}
+
+    if labels.any():
+        classes = set(labels)
+        colormap = plt.cm.rainbow(np.linspace(0, 1, len(classes)))
+        kwargs['c'] = [colormap[i] for i in labels]
+
+        # make room for legend
+        ax = plt.subplot(111)
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        handles = [mpatches.Circle((0,0), label=class_, color=colormap[i])
+                    for i, class_ in enumerate(classes)]
+        ax.legend(handles=handles, shadow=True, bbox_to_anchor=(1.05, 0.45),
+                    fancybox=True, loc='center left')
+
+    plt.scatter(xs, ys, **kwargs)
+
+    plt.show()
+    if save:
+        title = "{}_latent_{}_round_{}_{}".format(
+            model.datetime, "_".join(map(str, model.architecture)), model.step, name)
+        plt.savefig(os.path.join(model.plots_outdir, title), bbox_inches="tight")
+
+def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, outdir=PLOTS_OUTDIR):
+    """Util to explore low-dimensional manifold of latent space"""
+    assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
+
+    dim = int(model.architecture[0]**0.5)
+    min_, max_ = range_
+
+    # complex number steps act like np.linspace
+    # row, col indices (i, j) correspond to graph coords (y, x)
+    # rollaxis enables iteration over latent space 2-tuples
+    zs = np.rollaxis(np.mgrid[max_:min_:ny*1j, min_:max_:nx*1j], 0, 3)
+    canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
+                                    model.decode(z_row)]) for z_row in iter(zs)])
+
+    plt.figure(figsize=(10, 10))
+    # `extent` sets axis labels corresponding to latent space coords
+    plt.imshow(canvas, cmap="Greys", aspect="auto", extent=(range_ * 2))
+    plt.tight_layout()
+
+    plt.show()
+    if save:
+        title = "{}_latent_{}_round_{}_explore".format(
+            model.datetime, "_".join(map(str, model.architecture)), model.step)
+        plt.savefig(os.path.join(model.plots_outdir, title), bbox_inches="tight")
+
+def interpolate(model, latent_1, latent_2, n=20, save=True, name="interpolate", outdir=PLOTS_OUTDIR):
+    """Util to interpolate between two points in n-dimensional latent space"""
+    zs = np.array([np.linspace(start, end, n) # interpolate across every z dimension
+                    for start, end in zip(latent_1, latent_2)]).T
+    xs_reconstructed = model.decode(zs)
+
+    dim = int(model.architecture[0]**0.5)
+    canvas = np.hstack([x.reshape([dim, dim]) for x in xs_reconstructed])
+
+    plt.figure(figsize = (n, 2))
+    plt.imshow(canvas, cmap="Greys")
+    plt.axis("off")
+    plt.tight_layout()
+
+    plt.show()
+    if save:
+        title = "{}_latent_{}_round_{}_{}".format(
+            model.datetime, "_".join(map(str, model.architecture)), model.step, name)
+        plt.savefig(os.path.join(model.plots_outdir, title), bbox_inches="tight")
+
+def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10, save=True, name="random_walk", outdir=PLOTS_OUTDIR):
+    # TODO: random walk gif in latent space!
+    dim = int(model.architecture[0]**0.5)
+
+    def iterWalk(start):
+        """Yield points on random walk"""
+        def step():
+            """Equally sized step in random direction"""
+            # random normal in each dimension
+            direction = np.random.randn(starting_pt.size)
+            return step_size * (direction / np.linalg.norm(direction))
+
+        here = start
+        yield here
+        while True:
+            next_step = step()
+            for i in range(steps_till_turn):
+                here += next_step
+                yield here
+
+    if not starting_pt.any():
+        # if not specified, pick randomly from latent space
+        starting_pt = 4 * np.random.randn(model.architecture[-1])
+    walk = iterWalk(starting_pt)
+
+    def to_rgb(im):
+        # c/o http://www.socouldanyone.com/2013/03/converting-grayscale-to-rgb-with-numpy.html
+        return np.dstack([im.astype(np.uint8)] * 3)
+
+    def make_frame(t):
+        z = next(walk)
+        x_reconstructed = model.decode([z]).reshape([dim, dim])
+        return to_rgb(x_reconstructed)
+    # TODO: recursive ?
+
+    clip = movie.VideoClip(make_frame, duration=30)
+    #clip.write_videofile("./movie.mp4", fps=10)
+    return clip
