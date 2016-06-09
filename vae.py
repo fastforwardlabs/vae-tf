@@ -43,8 +43,8 @@ class Layer():
         stddev = tf.cast((2 / fan_in)**0.5, tf.float32)
 
         initial_w = (
-            tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal else
-            #tf.random_normal([fan_in, fan_out], stddev=stddev) if normal else
+            # tf.truncated_normal([fan_in, fan_out], stddev=stddev) if normal else
+            tf.random_normal([fan_in, fan_out], stddev=stddev) if normal else
             tf.random_uniform([fan_in, fan_out], -stddev, stddev) # (range therefore not truly stddev)
         )
         initial_b = tf.zeros([fan_out])
@@ -230,7 +230,8 @@ class VAE():
     def kullbackLeibler(mu, log_sigma):
         # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
-            return -0.5 * tf.reduce_sum(1 + log_sigma - mu**2 - tf.exp(log_sigma), 1)
+            return -0.5 * tf.reduce_sum(1 + 2 * log_sigma - mu**2 - tf.exp(2 * log_sigma), 1)
+            # return -0.5 * tf.reduce_sum(1 + log_sigma - mu**2 - tf.exp(log_sigma), 1)
 
     def encode(self, x):
         """Encoder from inputs to latent distribution parameters"""
