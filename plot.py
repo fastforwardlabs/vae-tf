@@ -7,7 +7,8 @@ import numpy as np
 
 PLOTS_OUTDIR = "./png"
 
-def plotSubset(model, x_in, x_reconstructed, n=10, save=True, name="subset", outdir=PLOTS_OUTDIR):
+def plotSubset(model, x_in, x_reconstructed, n=10, save=True, name="subset",
+               outdir=PLOTS_OUTDIR):
     """Util to plot subset of inputs and reconstructed outputs"""
     n = min(n, x_in.shape[0])
     plt.figure(figsize = (n * 2, 4))
@@ -32,9 +33,10 @@ def plotSubset(model, x_in, x_reconstructed, n=10, save=True, name="subset", out
     if save:
         title = "{}_batch_{}_round_{}_{}".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step, name)
-        plt.savefig(os.path.join(model.plots_outdir, title), bbox_inches="tight")
+        plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
-def plotInLatent(model, x_in, labels=np.array([]), save=True, name="data", outdir=PLOTS_OUTDIR):
+def plotInLatent(model, x_in, labels=np.array([]), save=True, name="data",
+                 outdir=PLOTS_OUTDIR):
     """Util to plot points in 2-D latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
     mus, _ = model.encode(x_in)
@@ -63,8 +65,9 @@ def plotInLatent(model, x_in, labels=np.array([]), save=True, name="data", outdi
     plt.show()
     if save:
         title = "{}_latent_{}_round_{}_{}".format(
-            model.datetime, "_".join(map(str, model.architecture)), model.step, name)
-        plt.savefig(os.path.join(model.plots_outdir, title), bbox_inches="tight")
+            model.datetime, "_".join(map(str, model.architecture)),
+            model.step, name)
+        plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, outdir=PLOTS_OUTDIR):
     """Util to explore low-dimensional manifold of latent space"""
@@ -89,7 +92,7 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, outdir=PLOTS_O
     if save:
         title = "{}_latent_{}_round_{}_explore".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step)
-        plt.savefig(os.path.join(model.plots_outdir, title), bbox_inches="tight")
+        plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 def interpolate(model, latent_1, latent_2, n=20, save=True, name="interpolate", outdir=PLOTS_OUTDIR):
     """Util to interpolate between two points in n-dimensional latent space"""
@@ -109,9 +112,10 @@ def interpolate(model, latent_1, latent_2, n=20, save=True, name="interpolate", 
     if save:
         title = "{}_latent_{}_round_{}_{}".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step, name)
-        plt.savefig(os.path.join(model.plots_outdir, title), bbox_inches="tight")
+        plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
-def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10, save=True, name="random_walk", outdir=PLOTS_OUTDIR):
+def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10,
+               save=True, outdir=PLOTS_OUTDIR):
     # TODO: random walk gif in latent space!
     dim = int(model.architecture[0]**0.5)
 
@@ -146,6 +150,9 @@ def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10
         return to_rgb(x_reconstructed)
     # TODO: recursive ?
 
-    clip = movie.VideoClip(make_frame, duration=30)
-    #clip.write_videofile("./movie.mp4", fps=10)
-    return clip
+    clip = movie.VideoClip(make_frame, duration=20)
+
+    if save:
+        title = "{}_random_walk_{}_round_{}.mp4".format(
+            model.datetime, "_".join(map(str, model.architecture)), model.step)
+        clip.write_videofile(os.path.join(outdir, title), fps=10)
