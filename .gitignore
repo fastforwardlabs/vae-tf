@@ -7,3 +7,5 @@ log
 png
 __pycache__
 *ipynb*
+data
+out
