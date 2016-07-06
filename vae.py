@@ -155,7 +155,7 @@ class VAE():
         # sample (estimated) prior
         with tf.name_scope("sample_gaussian"):
             # sampling / reparameterization trick
-            epsilon = tf.random_normal(tf.shape(log_sigma), name="epsilon")
+            epsilon = tf.random_normal(tf.shape(log_sigma), stddev=1E-3, name="epsilon")
             # univariate gaussian ~ N(mu, sigma**2)
             # z ~ p(z|x)
             return mu + epsilon * tf.exp(log_sigma)

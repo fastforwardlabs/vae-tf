@@ -33,7 +33,7 @@ ARCHITECTURE = [IMG_DIM**2, # 4096, # char = 64*64,
 # (and symmetrically back out again)
 
 HYPERPARAMS = {
-    "batch_size": 128,
+    "batch_size": 50,
     "learning_rate": 1E-4,
     "dropout": 0.9,
     "lambda_l2_reg": 1E-5,
@@ -53,7 +53,7 @@ PLOTS_DIR = "./png/mnist"
 
 def load_mnist():
     from tensorflow.examples.tutorials.mnist import input_data
-    return input_data.read_data_sets("MNIST_data")
+    return input_data.read_data_sets("./data/MNIST_data")
 
 def all_plots(model, mnist):
     if model.architecture[-1] == 2: # only works for 2-D latent
@@ -85,7 +85,7 @@ def interpolate_digits(model, mnist):
     idxs = np.random.randint(0, imgs.shape[0] - 1, 2)
     mus, _ = model.encode(np.vstack(imgs[i] for i in idxs))
     plot.interpolate(model, *mus, name="interpolate_{}->{}".format(
-        *(labels[i] for i in idxs)))
+        *(labels[i] for i in idxs)), outdir=PLOTS_DIR)
 
 
 def test_mnist(to_reload=None):
