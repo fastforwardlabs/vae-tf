@@ -119,9 +119,11 @@ class VAE():
             regularizers = [tf.nn.l2_loss(var) for var in self.sesh.graph.get_collection(
                 "trainable_variables") if "weights" in var.name]
             l2_reg = self.lambda_l2_reg * tf.add_n(regularizers)
+            l2_reg = print_(l2_reg, "l2")
 
         # take mean over batch
-        cost = tf.reduce_mean(rec_loss + kl_loss, name="cost") + l2_reg # TODO: weighting ?
+        # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
+        cost = tf.reduce_mean(0.5 * rec_loss + kl_loss, name="cost") + l2_reg # TODO: weighting ?
         # cost = tf.add(rec_loss, kl_loss, name="cost")
         cost = print_(cost, "cost")
 
@@ -130,18 +132,19 @@ class VAE():
             optimizer = tf.train.AdamOptimizer(self.learning_rate)#, epsilon=1.)
             tvars = tf.trainable_variables()
             grads_and_vars = optimizer.compute_gradients(cost, tvars)
-            clipped = [(tf.clip_by_value(grad, -1, 1), tvar) # gradient clipping
+            # clipped = [(tf.clip_by_value(grad, -1, 1), tvar) # gradient clipping
+            clipped = [(tf.clip_by_value(grad, -5, 5), tvar) # gradient clipping
                     for grad, tvar in grads_and_vars]
             # self.global_norm = print_(tf.global_norm(tvars), "global norm")
-            # grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars), 1)
+            # # grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars), 1)
             train_op = optimizer.apply_gradients(clipped, global_step=global_step,
                                                  name="minimize_cost")
-            #train_op = optimizer.apply_gradients(list(zip(grads, tvars)))
-            #train_op = (tf.train.AdamOptimizer(self.learning_rate)
-                                #.minimize(cost))
-        #self.numerics = tf.add_check_numerics_ops()
+            # #train_op = optimizer.apply_gradients(list(zip(grads, tvars)))
+            # train_op = (tf.train.AdamOptimizer(self.learning_rate)
+            #                     .minimize(cost))
+        self.numerics = tf.add_check_numerics_ops()
         # ops to directly explore latent space
-        # defaults to prior z ~ N(0, 1)
+        # defaults to prior z ~ N(0, I)
         z_ = tf.placeholder_with_default(tf.random_normal([1, self.architecture[-1]]),
                                          shape=[None, self.architecture[-1]],
                                          name="latent_in")
@@ -156,7 +159,7 @@ class VAE():
         with tf.name_scope("sample_gaussian"):
             # sampling / reparameterization trick
             epsilon = tf.random_normal(tf.shape(log_sigma), name="epsilon")
-            # univariate gaussian ~ N(mu, sigma**2)
+            # multivariate gaussian ~ N(mu, sigma**2*I)
             # z ~ p(z|x)
             return mu + epsilon * tf.exp(log_sigma)
 

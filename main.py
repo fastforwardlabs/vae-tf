@@ -23,7 +23,7 @@ import vae
 
 IMG_DIM = 28
 
-ARCHITECTURE = [IMG_DIM**2, # 4096, # char = 64*64,
+ARCHITECTURE = [IMG_DIM**2, # 784 pixels
                 # intermediate encoding
                 # 1024, 1024,
                 500, 500, # 128
@@ -33,18 +33,19 @@ ARCHITECTURE = [IMG_DIM**2, # 4096, # char = 64*64,
 # (and symmetrically back out again)
 
 HYPERPARAMS = {
-    "batch_size": 50,
-    "learning_rate": 1E-4,
+    "batch_size": 128,
+    "learning_rate": 1E-3,
     "dropout": 0.9,
     "lambda_l2_reg": 1E-5,
-    # "nonlinearity": tf.nn.elu,
-    "nonlinearity": tf.nn.tanh,
+    "nonlinearity": tf.nn.elu,
+    # "nonlinearity": tf.nn.tanh,
     "squashing": tf.nn.sigmoid,
 }
 
 NAME = ""
 
-MAX_ITER = 20000#1E5#20000
+MAX_ITER = np.inf#20000#1E5#20000
+MAX_EPOCHS = 100
 
 LOG_DIR = "./log/mnist"
 METAGRAPH_DIR = "./out/mnist"
@@ -97,8 +98,8 @@ def test_mnist(to_reload=None):
 
     else:
         v = vae.VAE(ARCHITECTURE, HYPERPARAMS, log_dir=LOG_DIR, name=NAME)
-        v.train(mnist, max_iter=MAX_ITER, cross_validate=False, verbose=True,
-                save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
+        v.train(mnist, max_iter=MAX_ITER, max_epochs=MAX_EPOCHS, cross_validate=False,
+                verbose=True, save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
         print("Trained!")
 
     all_plots(v, mnist)
