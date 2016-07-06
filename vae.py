@@ -155,13 +155,13 @@ class VAE():
         # sample (estimated) prior
         with tf.name_scope("sample_gaussian"):
             # sampling / reparameterization trick
-            epsilon = tf.random_normal(tf.shape(log_sigma), stddev=1E-3, name="epsilon")
+            epsilon = tf.random_normal(tf.shape(log_sigma), name="epsilon")
             # univariate gaussian ~ N(mu, sigma**2)
             # z ~ p(z|x)
             return mu + epsilon * tf.exp(log_sigma)
 
     @staticmethod
-    def crossEntropy(obs, actual, offset=1e-10):
+    def crossEntropy(obs, actual, offset=1e-7):
         # (tf.Tensor, tf.Tensor, float) -> tf.Tensor
         # binary cross-entropy - assumes p(x|z) is a multivariate Bernoulli
         with tf.name_scope("cross_entropy"):
