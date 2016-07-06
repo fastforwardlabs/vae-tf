@@ -5,38 +5,47 @@ import matplotlib.pyplot as plt
 import moviepy.editor as movie
 import numpy as np
 
-PLOTS_OUTDIR = "./png"
 
-def plotSubset(model, x_in, x_reconstructed, n=10, save=True, name="subset",
-               outdir=PLOTS_OUTDIR):
+def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
+               save=True, name="subset", outdir="."):
     """Util to plot subset of inputs and reconstructed outputs"""
     n = min(n, x_in.shape[0])
-    plt.figure(figsize = (n * 2, 4))
+    cols = (cols if cols else n)
+    rows = 2 * int(np.ceil(n / cols)) # doubled b/c input & reconstruction
+
+    plt.figure(figsize = (cols * 2, rows * 2))
     plt.title("round {}: {}".format(model.step, name))
     # assume square images
     dim = int(model.architecture[0]**0.5)
 
-    for idx in range(n):
+    for i, x in enumerate(x_in[:n], 1):
         # display original
-        ax = plt.subplot(2, n, idx + 1) # rows, cols, subplot numbered from 1
-        plt.imshow(x_in[idx].reshape([dim, dim]), cmap="Greys")
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
+        ax = plt.subplot(rows, cols, i) # rows, cols, subplot numbered from 1
+        plt.imshow(x.reshape([dim, dim]), cmap="Greys")
+        if outlines:
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+        else:
+            ax.set_axis_off()
 
+    for i, x in enumerate(x_reconstructed[:n], 1):
         # display reconstruction
-        ax = plt.subplot(2, n, idx + n + 1)
-        plt.imshow(x_reconstructed[idx].reshape([dim, dim]), cmap="Greys")
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
+        ax = plt.subplot(rows, cols, i + cols * (rows / 2))
+        plt.imshow(x.reshape([dim, dim]), cmap="Greys")
+        if outlines:
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+        else:
+            ax.set_axis_off()
 
     plt.show()
     if save:
-        title = "{}_batch_{}_round_{}_{}".format(
+        title = "{}_batch_{}_round_{}_{}.png".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step, name)
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
-def plotInLatent(model, x_in, labels=np.array([]), save=True, name="data",
-                 outdir=PLOTS_OUTDIR):
+
+def plotInLatent(model, x_in, labels=[], save=True, name="data", outdir="."):
     """Util to plot points in 2-D latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
     mus, _ = model.encode(x_in)
@@ -46,8 +55,8 @@ def plotInLatent(model, x_in, labels=np.array([]), save=True, name="data",
     plt.title("round {}: {} in latent space".format(model.step, name))
     kwargs = {'alpha': 0.8}
 
-    if labels.any():
-        classes = set(labels)
+    classes = set(labels)
+    if classes:
         colormap = plt.cm.rainbow(np.linspace(0, 1, len(classes)))
         kwargs['c'] = [colormap[i] for i in labels]
 
@@ -69,7 +78,9 @@ def plotInLatent(model, x_in, labels=np.array([]), save=True, name="data",
             model.step, name)
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
-def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, outdir=PLOTS_OUTDIR):
+
+def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, name="explore",
+                  outdir="."):
     """Util to explore low-dimensional manifold of latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
 
@@ -90,11 +101,12 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, outdir=PLOTS_O
 
     plt.show()
     if save:
-        title = "{}_latent_{}_round_{}_explore".format(
-            model.datetime, "_".join(map(str, model.architecture)), model.step)
+        title = "{}_latent_{}_round_{}_{}.png".format(
+            model.datetime, "_".join(map(str, model.architecture)), model.step, name)
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
-def interpolate(model, latent_1, latent_2, n=20, save=True, name="interpolate", outdir=PLOTS_OUTDIR):
+
+def interpolate(model, latent_1, latent_2, n=20, save=True, name="interpolate", outdir="."):
     """Util to interpolate between two points in n-dimensional latent space"""
     zs = np.array([np.linspace(start, end, n) # interpolate across every z dimension
                     for start, end in zip(latent_1, latent_2)]).T
@@ -114,8 +126,40 @@ def interpolate(model, latent_1, latent_2, n=20, save=True, name="interpolate", 
             model.datetime, "_".join(map(str, model.architecture)), model.step, name)
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
+
+def latent_arithmetic(model, a, b, c, save=True, name="arithmetic", outdir="."):
+    """Util to implement vector math in latent space equivalent to (a - b + c)"""
+    inputs = (a, b, c)
+    a_, b_, c_ = (model.sampleGaussian(*model.encode(vec)) for vec in inputs)
+    d = model.decode(a_ - b_ + c_)
+
+    plt.figure(figsize = (5, 4))
+    plt.title("a + b - c = ...")
+    # assume square images
+    dim = int(model.architecture[0]**0.5)
+
+    for i, img in enumerate(inputs):
+        # inputs to latent vector arithmetic
+        ax = plt.subplot(2, 3, i + 1) # rows, cols, subplot numbered from 1
+        plt.imshow(img.reshape([dim, dim]), cmap="Greys")
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+    # display output
+    ax = plt.subplot(2, 3, 5)
+    plt.imshow(d.reshape([dim, dim]), cmap="Greys")
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
+    plt.show()
+    if save:
+        title = "{}_latent_{}_round_{}_{}.png".format(
+            model.datetime, "_".join(map(str, model.architecture)), model.step, name)
+        plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
+
+
 def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10,
-               save=True, outdir=PLOTS_OUTDIR):
+               save=True, outdir="."):
     # TODO: random walk gif in latent space!
     dim = int(model.architecture[0]**0.5)
 

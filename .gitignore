@@ -1,11 +1,10 @@
 *pyc
-MNIST_data
-events*
-*.png
-imgs
 log
 png
 __pycache__
+ghostdriver.log
+notebooks
 *ipynb*
 data
 out
+*.txt
