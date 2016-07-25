@@ -34,10 +34,10 @@ class VAE():
         self.__dict__.update(VAE.DEFAULTS, **d_hyperparams)
         self.sesh = tf.Session()
 
+        # new model
         if not meta_graph:
-            # YYMMDD_HHMM
             self.datetime = "".join(c for c in str(datetime.today()) if c.isdigit()
-                                    or c.isspace())[2:13].replace(" ", "_")
+                                    or c.isspace())[2:13].replace(" ", "_") # YYMMDD_HHMM
             if name:
                 self.datetime += "_{}".format(name)
 
@@ -47,6 +47,7 @@ class VAE():
                 tf.add_to_collection(VAE.RESTORE_KEY, handle)
             self.sesh.run(tf.initialize_all_variables())
 
+        # restore saved model
         else:
             self.datetime = "{}_reloaded".format(os.path.basename(meta_graph)[:11])
             # rebuild graph
@@ -81,20 +82,21 @@ class VAE():
                     for hidden_size in reversed(self.architecture[1:-1])]
         h_encoded = composeAll(encoding)(x_in)
 
-        # latent distribution Z from which X is generated, parameterized based on hidden encoding
+        # latent distribution over z from which x is generated, parameterized based on hidden encoding
         z_mean = Dense("z_mean", self.architecture[-1], dropout)(h_encoded)
         z_log_sigma = Dense("z_log_sigma", self.architecture[-1], dropout)(h_encoded)
 
         # let z ~ N(z_mean, np.exp(z_log_sigma)**2)
-        # probabilistic decoder - given z, can observe distribution over corresponding x!
-        # kingma & welling: only 1 draw per datapoint necessary as long as minibatch is large enough (>100)
+        # probabilistic decoder -- given choice of z, can observe corresponding x
+        # kingma & welling: only 1 draw necessary as long as minibatch is large enough (>100)
         z = self.sampleGaussian(z_mean, z_log_sigma)
 
         # decoding / "generative": p(x|z)
         # assumes symmetric hidden architecture
         decoding = [Dense("decoding", hidden_size, dropout, self.nonlinearity)
                     for hidden_size in self.architecture[1:-1]]
-        # prepend final reconstruction as outermost fn --> restore original dims, squash outputs [0, 1]
+        # prepend final reconstruction as outermost fn
+        # --> restore original dims, squash outputs [0, 1]
         decoding.insert(0, Dense("x_decoding", self.architecture[0], dropout, self.squashing))
         x_reconstructed = tf.identity(composeAll(decoding)(z), name="x_reconstructed")
 
