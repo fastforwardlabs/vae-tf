@@ -16,13 +16,12 @@ class VAE():
     see: Kingma & Welling - Auto-Encoding Variational Bayes
     (http://arxiv.org/pdf/1312.6114v10.pdf)
     """
-
     DEFAULTS = {
         "batch_size": 128,
         "learning_rate": 1E-3,
         "dropout": 1.,
-        "lambda_l2_reg": 0., #TODO
-        "nonlinearity": tf.nn.tanh,
+        "lambda_l2_reg": 0.,
+        "nonlinearity": tf.nn.elu,
         "squashing": tf.nn.sigmoid,
         #"rec_loss": "xent" # "l1", "l2" # TODO: yay/nay
     }
@@ -32,18 +31,17 @@ class VAE():
                  save_graph_def=True, log_dir="./log"):
         """(Re)build a symmetric VAE model with given:
 
-            * architecture (list of nodes per encoder layer);
-               i.e. [1000, 500, 250, 10] specifies a VAE with 1000 input dims, 10 latent dims,
-               & end-to-end architecture [1000, 500, 250, 10, 250, 500, 1000]
+         * architecture (list of nodes per encoder layer); i.e.
+           [1000, 500, 250, 10] specifies a VAE with 1000 input dims, 10 latent dims,
+           & end-to-end architecture [1000, 500, 250, 10, 250, 500, 1000]
 
-            * hyperparameters (dictionary of updates to `DEFAULTS`, if specified)
+         * hyperparameters (dictionary of updates to `DEFAULTS`, if specified)
         """
         self.architecture = architecture
         self.__dict__.update(VAE.DEFAULTS, **d_hyperparams)
         self.sesh = tf.Session()
 
-        # new model
-        if not meta_graph:
+        if not meta_graph: # new model
             self.datetime = "".join(c for c in str(datetime.today()) if c.isdigit()
                                     or c.isspace())[2:13].replace(" ", "_") # YYMMDD_HHMM
             # build graph
@@ -52,8 +50,7 @@ class VAE():
                 tf.add_to_collection(VAE.RESTORE_KEY, handle)
             self.sesh.run(tf.initialize_all_variables())
 
-        # restore saved model
-        else:
+        else: # restore saved model
             self.datetime = "{}_reloaded".format(os.path.basename(meta_graph)[:11])
             # rebuild graph
             meta_graph = os.path.abspath(meta_graph)
@@ -82,25 +79,23 @@ class VAE():
         # encoding / "recognition": q(z|x)
         # approximation of true posterior p(z|x) -- intractable to calculate
         encoding = [Dense("encoding", hidden_size, dropout, self.nonlinearity)
-                    # hidden layers reversed for function composition -- outer -> inner
+                    # hidden layers reversed for function composition: outer -> inner
                     for hidden_size in reversed(self.architecture[1:-1])]
         h_encoded = composeAll(encoding)(x_in)
 
-        # latent distribution over z responsible for observed x, parameterized based on hidden encoding
-        # q(z|x) ~ N(z_mean, np.exp(z_log_sigma)**2)
+        # latent distribution over z responsible for observed x, parameterized
+        # by hidden encoding: z ~ N(z_mean, np.exp(z_log_sigma)**2)
         z_mean = Dense("z_mean", self.architecture[-1], dropout)(h_encoded)
         z_log_sigma = Dense("z_log_sigma", self.architecture[-1], dropout)(h_encoded)
-        # kingma & welling: only 1 draw necessary as long as minibatch is large enough (>100)
+        # kingma & welling: only 1 draw necessary as long as minibatch large enough (>100)
         z = self.sampleGaussian(z_mean, z_log_sigma)
 
         # decoding / "generative": p(x|z)
-        # given choice of z, generate corresponding x
-        # (assumes symmetric hidden architecture)
         decoding = [Dense("decoding", hidden_size, dropout, self.nonlinearity)
-                    for hidden_size in self.architecture[1:-1]]
-        # final reconstruction -- restore original dims, squash outputs [0, 1]
-        # prepend as outermost function
-        decoding.insert(0, Dense("x_decoding", self.architecture[0], dropout, self.squashing))
+                    for hidden_size in self.architecture[1:-1]] # assumes symmetry
+        # final reconstruction: restore original dims, squash outputs [0, 1]
+        decoding.insert(0, Dense( # prepend as outermost function
+            "x_decoding", self.architecture[0], dropout, self.squashing))
         x_reconstructed = tf.identity(composeAll(decoding)(z), name="x_reconstructed")
 
         # ops to directly explore latent space
