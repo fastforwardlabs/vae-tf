@@ -56,7 +56,7 @@ class VAE():
             handles = self.sesh.graph.get_collection(VAE.RESTORE_KEY)
 
         # unpack handles for tensor ops to feed or fetch
-        (self.x_in, self.dropout_, self.z_mean, self.z_log_sigma, self.z,
+        (self.x_in, self.dropout_, self.z_mean, self.z_log_sigma,
          self.x_reconstructed, self.z_, self.x_reconstructed_,
          self.cost, self.global_step, self.train_op) = handles
 
@@ -108,24 +108,29 @@ class VAE():
         rec_loss = VAE.crossEntropy(x_reconstructed, x_in)
         # rec_loss = VAE.l1_loss(x_reconstructed, x_in)
         # rec_loss = 0.5 * VAE.l2_loss(x_reconstructed, x_in) # "half of the euclidean error" = MSE
-        rec_loss = print_(rec_loss, "rec")
+        # rec_loss = print_(rec_loss, "rec")
         # Kullback-Leibler divergence: mismatch b/w approximate vs. imposed/true posterior
         # update variational distribution parameters / model's "wordview" to decrease "surprise"
         # as per http://www.logarithmic.net/pfh/blog/01133823191 / http://ilab.usc.edu/surprise
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
-        kl_loss = print_(kl_loss, "kl")
+        # kl_loss = print_(kl_loss, "kl")
 
         with tf.name_scope("l2_regularization"):
             regularizers = [tf.nn.l2_loss(var) for var in self.sesh.graph.get_collection(
                 "trainable_variables") if "weights" in var.name]
             l2_reg = self.lambda_l2_reg * tf.add_n(regularizers)
-            l2_reg = print_(l2_reg, "l2")
+            # l2_reg = print_(l2_reg, "l2")
 
         # take mean over batch
         # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
-        cost = tf.reduce_mean(0.5 * rec_loss + kl_loss, name="cost") + l2_reg # TODO: weighting ?
+        # alpha = 1. # TODO: weighting ?
+        # cost = tf.reduce_mean(alpha * rec_loss + kl_loss, name="cost")
+        with tf.name_scope("cost"):
+            cost = tf.reduce_mean(rec_loss + kl_loss, name="vae_cost") + l2_reg
         # cost = tf.add(rec_loss, kl_loss, name="cost")
-        cost = print_(cost, "cost")
+        # cost = print_(cost, "cost")
+
+        # cost += l2_reg
 
         global_step = tf.Variable(0, trainable=False)
         with tf.name_scope("Adam_optimizer"):
@@ -142,16 +147,19 @@ class VAE():
             # #train_op = optimizer.apply_gradients(list(zip(grads, tvars)))
             # train_op = (tf.train.AdamOptimizer(self.learning_rate)
             #                     .minimize(cost))
-        self.numerics = tf.add_check_numerics_ops()
+
+        # self.numerics = tf.add_check_numerics_ops()
+
         # ops to directly explore latent space
         # defaults to prior z ~ N(0, I)
-        z_ = tf.placeholder_with_default(tf.random_normal([1, self.architecture[-1]]),
-                                         shape=[None, self.architecture[-1]],
-                                         name="latent_in")
+        with tf.name_scope("latent_in"):
+            z_ = tf.placeholder_with_default(tf.random_normal([1, self.architecture[-1]]),
+                                            shape=[None, self.architecture[-1]],
+                                            name="latent_in")
         x_reconstructed_ = composeAll(decoding)(z_)
 
-        return (x_in, dropout, z_mean, z_log_sigma, z, x_reconstructed, z_,
-                x_reconstructed_, cost, global_step, train_op)
+        return (x_in, dropout, z_mean, z_log_sigma, x_reconstructed,
+                z_, x_reconstructed_, cost, global_step, train_op)
 
     def sampleGaussian(self, mu, log_sigma):
         """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
@@ -227,6 +235,14 @@ class VAE():
             now = datetime.now().isoformat()[11:]
             print("------- Training begin: {} -------\n".format(now))
 
+            #######################################################################
+            # PLOT INITIAL LATENT
+            pow_ = 0
+            plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
+                                plots_outdir, name="explore_{}".format(00))
+            # pow_ += 1
+            #######################################################################
+
             while True:
                 x, _ = X.train.next_batch(self.batch_size)
                 feed_dict = {self.x_in: x, self.dropout_: self.dropout}
@@ -235,10 +251,21 @@ class VAE():
 
                 err_train += cost
 
+                #######################################################################
+                # PLOT LATENT OVER (LOG_2) TIME
+                if 2**pow_ == i:
+                    plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
+                                       plots_outdir, name="explore_{}".format(pow_))
+                    pow_ += 1
+
+                if i%5000 == 0:
+                    print("round {} --> avg cost: ".format(i), err_train / i)
+                #######################################################################
+
                 if i%1000 == 0 and verbose:
                     print("round {} --> avg cost: ".format(i), err_train / i)
 
-                if i%2000 == 0 and verbose and i >= 10000:
+                if i%2000 == 0 and verbose:# and i >= 10000:
                     plot.plotSubset(self, x, x_reconstructed, n=10, name="train",
                                     outdir=plots_outdir)
 
