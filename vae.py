@@ -33,7 +33,7 @@ class VAE():
         """(Re)build a symmetric VAE model with given:
 
             * architecture (list of nodes per encoder layer);
-               i.e. [1000, 500, 250, 10] specifies a VAE with 1000 input dims, 10 latent dims,
+               i.e. [1000, 500, 250, 10] specifies a VAE with 1000-D inputs, 10-D latents,
                & end-to-end architecture [1000, 500, 250, 10, 250, 500, 1000]
 
             * hyperparameters (dictionary of updates to `DEFAULTS`, if specified)
@@ -127,7 +127,7 @@ class VAE():
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
         kl_loss = print_(kl_loss, "kl")
 
-        # take mean over minibatch
+        # average over minibatch
         # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
         cost = tf.reduce_mean(0.5 * rec_loss + kl_loss, name="cost") # TODO: weighting ?
         cost = print_(cost, "cost")
@@ -155,16 +155,15 @@ class VAE():
                 z_, x_reconstructed_, cost, global_step, train_op)
 
     def sampleGaussian(self, mu, log_sigma):
-        """Draw sample from Gaussian with given shape, subject to random noise epsilon"""
-        # (differentiably!) sample approximate posterior q(z|x)
+        """(Differentiably!) draw sample from Gaussian with given shape, subject to random noise epsilon"""
         with tf.name_scope("sample_gaussian"):
             # reparameterization trick
             epsilon = tf.random_normal(tf.shape(log_sigma), name="epsilon")
-            return mu + epsilon * tf.exp(log_sigma) # Norm(mu, I * sigma**2)
+            return mu + epsilon * tf.exp(log_sigma) # Norm(mu, sigma**2)
 
     @staticmethod
     def crossEntropy(obs, actual, offset=1e-7):
-        """Binary cross-entropy, per minibatch element"""
+        """Binary cross-entropy, per training example"""
         # (tf.Tensor, tf.Tensor, float) -> tf.Tensor
         with tf.name_scope("cross_entropy"):
             # bound by clipping to avoid nan
@@ -174,21 +173,21 @@ class VAE():
 
     @staticmethod
     def l1_loss(obs, actual):
-        """L1 loss (a.k.a. LAD), per minibatch element"""
+        """L1 loss (a.k.a. LAD), per training example"""
         # (tf.Tensor, tf.Tensor, float) -> tf.Tensor
         with tf.name_scope("l1_loss"):
             return tf.reduce_sum(tf.abs(obs - actual) , 1)
 
     @staticmethod
     def l2_loss(obs, actual):
-        """L2 loss (a.k.a. Euclidean / LSE), per minibatch element"""
+        """L2 loss (a.k.a. Euclidean / LSE), per training example"""
         # (tf.Tensor, tf.Tensor, float) -> tf.Tensor
         with tf.name_scope("l2_loss"):
             return tf.reduce_sum(tf.square(obs - actual), 1)
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
-        """Kullback-Leibler divergence KL(q||p), per minibatch element"""
+        """Kullback-Leibler divergence KL(q||p), per training example"""
         # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
             # = 0.5 * (1 + log(sigma**2) - mu**2 - sigma**2)
