@@ -8,7 +8,7 @@ class Layer():
         """Helper to initialize weights and biases, via He's adaptation
         of Xavier init for ReLUs: https://arxiv.org/pdf/1502.01852v1.pdf
         """
-        # (int, int, bool) -> (tf.Variable, tf.Variable)
+        # (int, int) -> (tf.Variable, tf.Variable)
         stddev = tf.cast((2 / fan_in)**0.5, tf.float32)
 
         initial_w = tf.random_normal([fan_in, fan_out], stddev=stddev)
