@@ -4,7 +4,7 @@ import tensorflow as tf
 class Layer():
     """Neural network layer base class"""
     @staticmethod
-    def wbVars(fan_in: int, fan_out: int, normal=True):
+    def wbVars(fan_in: int, fan_out: int):
         """Helper to initialize weights and biases, via He's adaptation
         of Xavier init for ReLUs: https://arxiv.org/pdf/1502.01852v1.pdf
         """
