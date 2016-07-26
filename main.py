@@ -6,30 +6,14 @@ import tensorflow as tf
 import plot
 import vae
 
-# TODO
-# optimize hyperparams
-
-# xavier init for non-relu ?
-
-# cost reduce_mean vs reduce_sum
-# l1_loss vs l2_loss vs bin_xent
-
-# rectifier: sigmoid vs clipped relu vs ...
-
-# random_walk
-# z vector arithmetic
-# sampling from latent dist gif ?
-# latent manifold over course of training
 
 IMG_DIM = 28
 
 ARCHITECTURE = [IMG_DIM**2, # 784 pixels
-                # intermediate encoding
+                500, 500, # intermediate encoding
                 # 1024, 1024,
-                500, 500, # 128
-                # latent space dims
+                2] # latent space dims
                 # 10]
-                2]
 # (and symmetrically back out again)
 
 HYPERPARAMS = {
@@ -41,8 +25,6 @@ HYPERPARAMS = {
     # "nonlinearity": tf.nn.tanh,
     "squashing": tf.nn.sigmoid,
 }
-
-NAME = ""
 
 MAX_ITER = np.inf#20000#1E5#20000
 MAX_EPOCHS = 100
