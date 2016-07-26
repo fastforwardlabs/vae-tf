@@ -23,11 +23,10 @@ class VAE():
         "lambda_l2_reg": 0.,
         "nonlinearity": tf.nn.elu,
         "squashing": tf.nn.sigmoid,
-        #"rec_loss": "xent" # "l1", "l2" # TODO: yay/nay
     }
     RESTORE_KEY = "to_restore"
 
-    def __init__(self, architecture: list[int], d_hyperparams={}, meta_graph=None,
+    def __init__(self, architecture, d_hyperparams={}, meta_graph=None,
                  save_graph_def=True, log_dir="./log"):
         """(Re)build a symmetric VAE model with given:
 
@@ -221,7 +220,6 @@ class VAE():
 
         try:
             err_train = 0
-            #err_cv = 0
             now = datetime.now().isoformat()[11:]
             print("------- Training begin: {} -------\n".format(now))
 
@@ -236,8 +234,8 @@ class VAE():
                 if i%1000 == 0 and verbose:
                     print("round {} --> avg cost: ".format(i), err_train / i)
 
-                if i%2000 == 0 and verbose and i >= 10000:
-                    # view `n` examples of current minibatch inputs + reconstructions
+                if i%2000 == 0 and verbose:# and i >= 10000:
+                    # visualize `n` examples of current minibatch inputs + reconstructions
                     plot.plotSubset(self, x, x_reconstructed, n=10, name="train",
                                     outdir=plots_outdir)
 
@@ -247,7 +245,6 @@ class VAE():
                         fetches = [self.x_reconstructed, self.cost]
                         x_reconstructed, cost = self.sesh.run(fetches, feed_dict)
 
-                        #err_cv += cost
                         print("round {} --> CV cost: ".format(i), cost)
                         plot.plotSubset(self, x, x_reconstructed, n=10, name="cv",
                                         outdir=plots_outdir)

@@ -79,7 +79,7 @@ def test_mnist(to_reload=None):
         print("Loaded!")
 
     else:
-        v = vae.VAE(ARCHITECTURE, HYPERPARAMS, log_dir=LOG_DIR, name=NAME)
+        v = vae.VAE(ARCHITECTURE, HYPERPARAMS, log_dir=LOG_DIR)
         v.train(mnist, max_iter=MAX_ITER, max_epochs=MAX_EPOCHS, cross_validate=False,
                 verbose=True, save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
         print("Trained!")
