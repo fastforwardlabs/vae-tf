@@ -41,8 +41,7 @@ class VAE():
         self.sesh = tf.Session()
 
         if not meta_graph: # new model
-            self.datetime = "".join(c for c in str(datetime.today()) if c.isdigit()
-                                    or c.isspace())[2:13].replace(" ", "_") # YYMMDD_HHMM
+            self.datetime = datetime.now().strftime(r"%y%m%d_%H%M")
             # build graph
             handles = self._buildGraph()
             for handle in handles:
