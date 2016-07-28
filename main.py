@@ -6,21 +6,6 @@ import tensorflow as tf
 import plot
 import vae
 
-# TODO
-# optimize hyperparams
-
-# xavier init for non-relu ?
-
-# cost reduce_mean vs reduce_sum
-# l1_loss vs l2_loss vs bin_xent
-
-# rectifier: sigmoid vs clipped relu vs ...
-
-# random_walk
-# z vector arithmetic
-# sampling from latent dist gif ?
-# latent manifold over course of training
-
 IMG_DIM = 28
 
 ARCHITECTURE = [IMG_DIM**2, # 784 pixels
@@ -40,11 +25,12 @@ HYPERPARAMS = {
     "nonlinearity": tf.nn.elu,
     # "nonlinearity": tf.nn.tanh,
     "squashing": tf.nn.sigmoid,
+    "kl_ratio": 4
 }
 
 NAME = ""
 
-MAX_ITER = 66000#np.inf#20000#1E5#20000
+MAX_ITER = 2**18#np.inf#20000#1E5#20000
 MAX_EPOCHS = np.inf#100
 
 LOG_DIR = "./log/mnist"
@@ -103,7 +89,7 @@ def test_mnist(to_reload=None):
                 save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
         print("Trained!")
 
-    all_plots(v, mnist)
+    # all_plots(v, mnist)
     #plot.randomWalk(v)
 
 

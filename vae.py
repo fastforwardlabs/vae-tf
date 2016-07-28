@@ -24,6 +24,7 @@ class VAE():
         "lambda_l2_reg": 0.,
         "nonlinearity": tf.nn.tanh,
         "squashing": tf.nn.sigmoid,
+        "kl_ratio": 1.
     }
     RESTORE_KEY = "to_restore"
 
@@ -126,7 +127,8 @@ class VAE():
         # alpha = 1. # TODO: weighting ?
         # cost = tf.reduce_mean(alpha * rec_loss + kl_loss, name="cost")
         with tf.name_scope("cost"):
-            cost = tf.reduce_mean(rec_loss + kl_loss, name="vae_cost") + l2_reg
+            cost = tf.reduce_mean(rec_loss + self.kl_ratio * kl_loss,
+                                  name="vae_cost") + l2_reg
         # cost = tf.add(rec_loss, kl_loss, name="cost")
         # cost = print_(cost, "cost")
 
@@ -236,11 +238,8 @@ class VAE():
             print("------- Training begin: {} -------\n".format(now))
 
             #######################################################################
-            # PLOT INITIAL LATENT
+            # LOG TIME
             pow_ = 0
-            plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
-                                plots_outdir, name="explore_{}".format(00))
-            # pow_ += 1
             #######################################################################
 
             while True:
@@ -256,9 +255,17 @@ class VAE():
                 if 2**pow_ == i:
                     plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
                                        plots_outdir, name="explore_{}".format(pow_))
+
+                    names = ("train", "validation", "test")
+                    datasets = (X.train, X.validation, X.test)
+                    for name, dataset in zip(names, datasets):
+                        plot.plotInLatent(self, dataset.images, dataset.labels, range_=
+                                          (-6, 6), name=name, outdir=plots_outdir)
+
+                    print("2^{} = {}".format(pow_, i))
                     pow_ += 1
 
-                if i%5000 == 0:
+                if i%5000 == 0: # non-verbose monitoring
                     print("round {} --> avg cost: ".format(i), err_train / i)
                 #######################################################################
 
