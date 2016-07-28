@@ -31,19 +31,18 @@ class VAE():
                  save_graph_def=True, log_dir="./log"):
         """(Re)build a symmetric VAE model with given:
 
-            * architecture (list of nodes per encoder layer);
-               i.e. [1000, 500, 250, 10] specifies a VAE with 1000-D inputs, 10-D latents,
+            * architecture (list of nodes per encoder layer); e.g.
+               [1000, 500, 250, 10] specifies a VAE with 1000-D inputs, 10-D latents,
                & end-to-end architecture [1000, 500, 250, 10, 250, 500, 1000]
 
-            * hyperparameters (dictionary of updates to `DEFAULTS`, if specified)
+            * hyperparameters (optional dictionary of updates to `DEFAULTS`)
         """
         self.architecture = architecture
         self.__dict__.update(VAE.DEFAULTS, **d_hyperparams)
         self.sesh = tf.Session()
 
         if not meta_graph: # new model
-            self.datetime = "".join(c for c in str(datetime.today()) if c.isdigit()
-                                    or c.isspace())[2:13].replace(" ", "_") # YYMMDD_HHMM
+            self.datetime = datetime.now().strftime(r"%y%m%d_%H%M")
             # build graph
             handles = self._buildGraph()
             for handle in handles:
