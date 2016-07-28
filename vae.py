@@ -23,6 +23,7 @@ class VAE():
         "lambda_l2_reg": 0.,
         "nonlinearity": tf.nn.elu,
         "squashing": tf.nn.sigmoid,
+        "kl_ratio": 1.
     }
     RESTORE_KEY = "to_restore"
 
@@ -114,12 +115,12 @@ class VAE():
         rec_loss = VAE.crossEntropy(x_reconstructed, x_in)
         # rec_loss = VAE.l1_loss(x_reconstructed, x_in)
         # rec_loss = 0.5 * VAE.l2_loss(x_reconstructed, x_in) # "half of the euclidean error" = MSE
-        rec_loss = print_(rec_loss, "rec")
-
-        # Kullback-Leibler divergence: mismatch b/w approximate posterior & imposed prior
-        # KL[q(z|x) || p(z)]
+        # rec_loss = print_(rec_loss, "rec")
+        # Kullback-Leibler divergence: mismatch b/w approximate vs. imposed/true posterior
+        # update variational distribution parameters / model's "wordview" to decrease "surprise"
+        # as per http://www.logarithmic.net/pfh/blog/01133823191 / http://ilab.usc.edu/surprise
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
-        kl_loss = print_(kl_loss, "kl")
+        # kl_loss = print_(kl_loss, "kl")
 
         # average over minibatch
         # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
@@ -130,9 +131,19 @@ class VAE():
             regularizers = [tf.nn.l2_loss(var) for var in self.sesh.graph.get_collection(
                 "trainable_variables") if "weights" in var.name]
             l2_reg = self.lambda_l2_reg * tf.add_n(regularizers)
-            l2_reg = print_(l2_reg, "l2")
-        cost += l2_reg
-        cost = print_(cost, "cost")
+            # l2_reg = print_(l2_reg, "l2")
+
+        # take mean over batch
+        # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
+        # alpha = 1. # TODO: weighting ?
+        # cost = tf.reduce_mean(alpha * rec_loss + kl_loss, name="cost")
+        with tf.name_scope("cost"):
+            cost = tf.reduce_mean(rec_loss + self.kl_ratio * kl_loss,
+                                  name="vae_cost") + l2_reg
+        # cost = tf.add(rec_loss, kl_loss, name="cost")
+        # cost = print_(cost, "cost")
+
+        # cost += l2_reg
 
         # training
         global_step = tf.Variable(0, trainable=False)
@@ -143,7 +154,20 @@ class VAE():
             clipped = [(tf.clip_by_value(grad, -5, 5), tvar) # gradient clipping
                     for grad, tvar in grads_and_vars]
             train_op = optimizer.apply_gradients(clipped, global_step=global_step,
-                                                 name="minimize_cost") # back-prop
+                                                 name="minimize_cost")
+            # #train_op = optimizer.apply_gradients(list(zip(grads, tvars)))
+            # train_op = (tf.train.AdamOptimizer(self.learning_rate)
+            #                     .minimize(cost))
+
+        # self.numerics = tf.add_check_numerics_ops()
+
+        # ops to directly explore latent space
+        # defaults to prior z ~ N(0, I)
+        with tf.name_scope("latent_in"):
+            z_ = tf.placeholder_with_default(tf.random_normal([1, self.architecture[-1]]),
+                                            shape=[None, self.architecture[-1]],
+                                            name="latent_in")
+        x_reconstructed_ = composeAll(decoding)(z_)
 
         return (x_in, dropout, z_mean, z_log_sigma, x_reconstructed,
                 z_, x_reconstructed_, cost, global_step, train_op)
@@ -223,6 +247,11 @@ class VAE():
             now = datetime.now().isoformat()[11:]
             print("------- Training begin: {} -------\n".format(now))
 
+            #######################################################################
+            # LOG TIME
+            pow_ = 0
+            #######################################################################
+
             while True:
                 x, _ = X.train.next_batch(self.batch_size)
                 feed_dict = {self.x_in: x, self.dropout_: self.dropout}
@@ -230,6 +259,25 @@ class VAE():
                 x_reconstructed, cost, i, _ = self.sesh.run(fetches, feed_dict)
 
                 err_train += cost
+
+                #######################################################################
+                # PLOT LATENT OVER (LOG_2) TIME
+                if 2**pow_ == i:
+                    plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
+                                       plots_outdir, name="explore_{}".format(pow_))
+
+                    names = ("train", "validation", "test")
+                    datasets = (X.train, X.validation, X.test)
+                    for name, dataset in zip(names, datasets):
+                        plot.plotInLatent(self, dataset.images, dataset.labels, range_=
+                                          (-6, 6), name=name, outdir=plots_outdir)
+
+                    print("2^{} = {}".format(pow_, i))
+                    pow_ += 1
+
+                if i%5000 == 0: # non-verbose monitoring
+                    print("round {} --> avg cost: ".format(i), err_train / i)
+                #######################################################################
 
                 if i%1000 == 0 and verbose:
                     print("round {} --> avg cost: ".format(i), err_train / i)
