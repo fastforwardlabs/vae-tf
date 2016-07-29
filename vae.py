@@ -204,10 +204,10 @@ class VAE():
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
-        """Kullback-Leibler divergence KL(q||p), per training example"""
+        """(Gaussian) Kullback-Leibler divergence KL(q||p), per training example"""
         # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
-            # = 0.5 * (1 + log(sigma**2) - mu**2 - sigma**2)
+            # = -0.5 * (1 + log(sigma**2) - mu**2 - sigma**2)
             return -0.5 * tf.reduce_sum(1 + 2 * log_sigma - mu**2 - tf.exp(2 * log_sigma), 1)
 
     def encode(self, x):
