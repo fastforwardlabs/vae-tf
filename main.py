@@ -12,8 +12,8 @@ IMG_DIM = 28
 ARCHITECTURE = [IMG_DIM**2, # 784 pixels
                 500, 500, # intermediate encoding
                 # 1024, 1024,
-                2] # latent space dims
-                # 10]
+                #2] # latent space dims
+                50]
 # (and symmetrically back out again)
 
 HYPERPARAMS = {
@@ -26,8 +26,8 @@ HYPERPARAMS = {
     "squashing": tf.nn.sigmoid,
 }
 
-MAX_ITER = np.inf#20000#1E5#20000
-MAX_EPOCHS = 100
+MAX_ITER = 20000#1E5#20000
+MAX_EPOCHS = np.inf#100
 
 LOG_DIR = "./log/mnist"
 METAGRAPH_DIR = "./out/mnist"
@@ -94,7 +94,9 @@ def test_mnist(to_reload=None):
                 verbose=True, save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
         print("Trained!")
 
-    all_plots(v, mnist)
+    plot.freeAssociate(v, outdir=PLOTS_DIR)
+    # plot_all_end_to_end(v, mnist)
+    #all_plots(v, mnist)
     #plot.randomWalk(v)
 
 
@@ -107,5 +109,5 @@ if __name__ == "__main__":
         except(FileExistsError):
             pass
 
-    test_mnist()
-    # test_mnist(to_reload="")
+    # test_mnist()
+    test_mnist(to_reload="./out/mnist/160801_1234_vae_784_500_500_50-20000")

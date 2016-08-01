@@ -14,9 +14,8 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
     rows = 2 * int(np.ceil(n / cols)) # doubled b/c input & reconstruction
 
     plt.figure(figsize = (cols * 2, rows * 2))
-    plt.title("round {}: {}".format(model.step, name))
-    # assume square images
-    dim = int(model.architecture[0]**0.5)
+    # plt.title("round {}: {}".format(model.step, name))
+    dim = int(model.architecture[0]**0.5) # assume square images
 
     for i, x in enumerate(x_in[:n], 1):
         # display original
@@ -83,7 +82,6 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, name="explore"
                   outdir="."):
     """Util to explore low-dimensional manifold of latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
-
     dim = int(model.architecture[0]**0.5)
     min_, max_ = range_
 
