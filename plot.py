@@ -44,7 +44,8 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 
-def plotInLatent(model, x_in, labels=[], save=True, name="data", outdir="."):
+def plotInLatent(model, x_in, labels=[], range_=None, save=True, name="data",
+                 outdir="."):
     """Util to plot points in 2-D latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
     mus, _ = model.encode(x_in)
@@ -69,6 +70,10 @@ def plotInLatent(model, x_in, labels=[], save=True, name="data", outdir="."):
                     fancybox=True, loc='center left')
 
     plt.scatter(xs, ys, **kwargs)
+
+    if range_:
+        plt.xlim(*range_)
+        plt.ylim(*range_)
 
     plt.show()
     if save:

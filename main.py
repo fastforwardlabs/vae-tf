@@ -6,7 +6,6 @@ import tensorflow as tf
 import plot
 import vae
 
-
 IMG_DIM = 28
 
 ARCHITECTURE = [IMG_DIM**2, # 784 pixels
@@ -18,12 +17,13 @@ ARCHITECTURE = [IMG_DIM**2, # 784 pixels
 
 HYPERPARAMS = {
     "batch_size": 128,
-    "learning_rate": 1E-3,
+    "learning_rate": 5E-4,#1E-3,
     "dropout": 0.9,
-    "lambda_l2_reg": 1E-5,
+    "lambda_l2_reg": 1E-4,
     "nonlinearity": tf.nn.elu,
     # "nonlinearity": tf.nn.tanh,
     "squashing": tf.nn.sigmoid,
+    "kl_ratio": 4
 }
 
 MAX_ITER = 20000#1E5#20000
@@ -91,7 +91,8 @@ def test_mnist(to_reload=None):
     else:
         v = vae.VAE(ARCHITECTURE, HYPERPARAMS, log_dir=LOG_DIR)
         v.train(mnist, max_iter=MAX_ITER, max_epochs=MAX_EPOCHS, cross_validate=False,
-                verbose=True, save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
+                verbose=False,#True,
+                save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
         print("Trained!")
 
     plot.freeAssociate(v, outdir=PLOTS_DIR)
