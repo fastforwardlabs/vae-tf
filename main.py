@@ -70,6 +70,16 @@ def interpolate_digits(model, mnist):
     plot.interpolate(model, *mus, name="interpolate_{}->{}".format(
         *(labels[i] for i in idxs)), outdir=PLOTS_DIR)
 
+def plot_all_end_to_end(model, mnist):
+    names = ("train", "validation", "test")
+    datasets = (mnist.train, mnist.validation, mnist.test)
+    for name, dataset in zip(names, datasets):
+        x, _ = dataset.next_batch(10)
+        #feed_dict = {model.x_in: x}
+        #fetches = model.x_reconstructed
+        #x_reconstructed = model.sesh.run(fetches, feed_dict)
+        x_reconstructed = model.vae(x)
+        plot.plotSubset(model, x, x_reconstructed, n=10, name=name, outdir=PLOTS_DIR)
 
 def test_mnist(to_reload=None):
     mnist = load_mnist()
