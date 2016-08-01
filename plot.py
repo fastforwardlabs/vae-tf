@@ -200,3 +200,45 @@ def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10
         title = "{}_random_walk_{}_round_{}.mp4".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step)
         clip.write_videofile(os.path.join(outdir, title), fps=10)
+
+
+
+def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=10,
+                  save=True, outdir="."):
+    # TODO: random walk gif in latent space!
+    dim = int(model.architecture[0]**0.5)
+
+    def iterWalk(start):
+        """Yield points on random walk"""
+        def step():
+            """Equally sized step in random direction"""
+            # random normal in each dimension
+            direction = np.random.randn(starting_pt.size)
+            return step_size * (direction / np.linalg.norm(direction))
+
+        here = start
+        yield here
+        while True:
+            next_step = step()
+            for i in range(steps_till_turn):
+                here += next_step
+                yield here
+
+    if not starting_pt.any():
+        # if not specified, sample randomly from latent space
+        starting_pt = model.sesh.run(model.z_)
+
+    walk = iterWalk(starting_pt)
+    for i in range(100):
+        z = next(walk)
+        x_reconstructed = model.decode(z).reshape([dim, dim])
+        plt.figure(figsize = (2, 2))
+        plt.imshow(x_reconstructed, cmap="Greys")
+        plt.axis("off")
+        plt.tight_layout()
+
+        plt.show()
+        if save:
+            title = "{}_random_walk_{}_round_{}.{}.png".format(
+                model.datetime, "_".join(map(str, model.architecture)), model.step, i)
+            plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
