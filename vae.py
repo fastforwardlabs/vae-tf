@@ -14,7 +14,7 @@ class VAE():
     """Variational Autoencoder
 
     see: Kingma & Welling - Auto-Encoding Variational Bayes
-    (http://arxiv.org/pdf/1312.6114v10.pdf)
+    (http://arxiv.org/abs/1312.6114)
     """
     DEFAULTS = {
         "batch_size": 128,
@@ -261,18 +261,18 @@ class VAE():
 
                 #######################################################################
                 # PLOT LATENT OVER (LOG_2) TIME
-                if 2**pow_ == i:
-                    plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
-                                       plots_outdir, name="explore_{}".format(pow_))
+                # if 2**pow_ == i:
+                #     plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
+                #                        plots_outdir, name="explore_{}".format(pow_))
 
-                    names = ("train", "validation", "test")
-                    datasets = (X.train, X.validation, X.test)
-                    for name, dataset in zip(names, datasets):
-                        plot.plotInLatent(self, dataset.images, dataset.labels, range_=
-                                          (-6, 6), name=name, outdir=plots_outdir)
+                #     names = ("train", "validation", "test")
+                #     datasets = (X.train, X.validation, X.test)
+                #     for name, dataset in zip(names, datasets):
+                #         plot.plotInLatent(self, dataset.images, dataset.labels, range_=
+                #                           (-6, 6), name=name, outdir=plots_outdir)
 
-                    print("2^{} = {}".format(pow_, i))
-                    pow_ += 1
+                #     print("2^{} = {}".format(pow_, i))
+                #     pow_ += 1
 
                 if i%5000 == 0: # non-verbose monitoring
                     print("round {} --> avg cost: ".format(i), err_train / i)

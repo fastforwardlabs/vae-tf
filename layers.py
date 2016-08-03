@@ -6,7 +6,7 @@ class Layer():
     @staticmethod
     def wbVars(fan_in: int, fan_out: int):
         """Helper to initialize weights and biases, via He's adaptation
-        of Xavier init for ReLUs: https://arxiv.org/pdf/1502.01852v1.pdf
+        of Xavier init for ReLUs: https://arxiv.org/abs/1502.01852
         """
         # (int, int) -> (tf.Variable, tf.Variable)
         stddev = tf.cast((2 / fan_in)**0.5, tf.float32)
