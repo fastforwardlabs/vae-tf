@@ -144,7 +144,7 @@ class VAE():
 
         # cost += l2_reg
 
-        # training
+        # optimization
         global_step = tf.Variable(0, trainable=False)
         with tf.name_scope("Adam_optimizer"):
             optimizer = tf.train.AdamOptimizer(self.learning_rate)#, epsilon=1.)

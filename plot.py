@@ -14,9 +14,8 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
     rows = 2 * int(np.ceil(n / cols)) # doubled b/c input & reconstruction
 
     plt.figure(figsize = (cols * 2, rows * 2))
-    plt.title("round {}: {}".format(model.step, name))
-    # assume square images
-    dim = int(model.architecture[0]**0.5)
+    # plt.title("round {}: {}".format(model.step, name))
+    dim = int(model.architecture[0]**0.5) # assume square images
 
     for i, x in enumerate(x_in[:n], 1):
         # display original
@@ -88,7 +87,6 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, name="explore"
                   outdir="."):
     """Util to explore low-dimensional manifold of latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
-
     dim = int(model.architecture[0]**0.5)
     min_, max_ = range_
 
@@ -205,3 +203,45 @@ def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10
         title = "{}_random_walk_{}_round_{}.mp4".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step)
         clip.write_videofile(os.path.join(outdir, title), fps=10)
+
+
+
+def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=10,
+                  save=True, outdir="."):
+    # TODO: random walk gif in latent space!
+    dim = int(model.architecture[0]**0.5)
+
+    def iterWalk(start):
+        """Yield points on random walk"""
+        def step():
+            """Equally sized step in random direction"""
+            # random normal in each dimension
+            direction = np.random.randn(starting_pt.size)
+            return step_size * (direction / np.linalg.norm(direction))
+
+        here = start
+        yield here
+        while True:
+            next_step = step()
+            for i in range(steps_till_turn):
+                here += next_step
+                yield here
+
+    if not starting_pt.any():
+        # if not specified, sample randomly from latent space
+        starting_pt = model.sesh.run(model.z_)
+
+    walk = iterWalk(starting_pt)
+    for i in range(100):
+        z = next(walk)
+        x_reconstructed = model.decode(z).reshape([dim, dim])
+        plt.figure(figsize = (2, 2))
+        plt.imshow(x_reconstructed, cmap="Greys")
+        plt.axis("off")
+        plt.tight_layout()
+
+        plt.show()
+        if save:
+            title = "{}_random_walk_{}_round_{}.{}.png".format(
+                model.datetime, "_".join(map(str, model.architecture)), model.step, i)
+            plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
