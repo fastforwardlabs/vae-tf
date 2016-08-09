@@ -6,11 +6,11 @@ import tensorflow as tf
 import plot
 import vae
 
+
 IMG_DIM = 28
 
 ARCHITECTURE = [IMG_DIM**2, # 784 pixels
                 500, 500, # intermediate encoding
-                # 1024, 1024,
                 #2] # latent space dims
                 50]
 # (and symmetrically back out again)
@@ -21,12 +21,11 @@ HYPERPARAMS = {
     "dropout": 0.9,
     "lambda_l2_reg": 1E-4,
     "nonlinearity": tf.nn.elu,
-    # "nonlinearity": tf.nn.tanh,
     "squashing": tf.nn.sigmoid,
-    "kl_ratio": 4
+    "kl_ratio": 1
 }
 
-MAX_ITER = 20000#1E5#20000
+MAX_ITER = 2**17#20000#1E5#20000
 MAX_EPOCHS = np.inf#100
 
 LOG_DIR = "./log/mnist"
@@ -110,5 +109,5 @@ if __name__ == "__main__":
         except(FileExistsError):
             pass
 
-    # test_mnist()
-    test_mnist(to_reload="./out/mnist/160801_1234_vae_784_500_500_50-20000")
+    test_mnist()
+    # test_mnist(to_reload="./out/mnist/160801_1234_vae_784_500_500_50-20000")

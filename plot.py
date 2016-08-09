@@ -14,28 +14,25 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
     rows = 2 * int(np.ceil(n / cols)) # doubled b/c input & reconstruction
 
     plt.figure(figsize = (cols * 2, rows * 2))
-    # plt.title("round {}: {}".format(model.step, name))
     dim = int(model.architecture[0]**0.5) # assume square images
+
+    def drawSubplot(x_, ax_):
+        plt.imshow(x_.reshape([dim, dim]), cmap="Greys")
+        if outlines:
+            ax_.get_xaxis().set_visible(False)
+            ax_.get_yaxis().set_visible(False)
+        else:
+            ax_.set_axis_off()
 
     for i, x in enumerate(x_in[:n], 1):
         # display original
         ax = plt.subplot(rows, cols, i) # rows, cols, subplot numbered from 1
-        plt.imshow(x.reshape([dim, dim]), cmap="Greys")
-        if outlines:
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-        else:
-            ax.set_axis_off()
+        drawSubplot(x, ax)
 
     for i, x in enumerate(x_reconstructed[:n], 1):
         # display reconstruction
         ax = plt.subplot(rows, cols, i + cols * (rows / 2))
-        plt.imshow(x.reshape([dim, dim]), cmap="Greys")
-        if outlines:
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-        else:
-            ax.set_axis_off()
+        drawSubplot(x, ax)
 
     plt.show()
     if save:
@@ -45,14 +42,15 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
 
 
 def plotInLatent(model, x_in, labels=[], range_=None, save=True, name="data",
-                 outdir="."):
+                 title=None, outdir="."):
     """Util to plot points in 2-D latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
+    title = (title if title else name)
     mus, _ = model.encode(x_in)
     ys, xs = mus.T
 
     plt.figure()
-    plt.title("round {}: {} in latent space".format(model.step, name))
+    plt.title("round {}: {} in latent space".format(model.step, title))
     kwargs = {'alpha': 0.8}
 
     classes = set(labels)
