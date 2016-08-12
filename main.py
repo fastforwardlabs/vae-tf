@@ -6,13 +6,13 @@ import tensorflow as tf
 import plot
 import vae
 
+
 IMG_DIM = 28
 
 ARCHITECTURE = [IMG_DIM**2, # 784 pixels
                 500, 500, # intermediate encoding
-                # 1024, 1024,
-                2] # latent space dims
-                # 50]
+                #2] # latent space dims
+                50]
 # (and symmetrically back out again)
 
 HYPERPARAMS = {
@@ -54,6 +54,8 @@ def all_plots(model, mnist):
     # # chars[0] - chars[1] + chars[2]
     # plot.latent_arithmetic(model, *[np.expand_dims(c, 0) for c in chars], name=
     #                        "{}-{}+{}".format(ORIG, ORIG, TARGET), outdir=PLOTS_DIR)
+    for i in range(10):
+        plot.justMNIST(*mnist.train.next_batch(1), outdir=PLOTS_DIR)
 
 def plot_all_in_latent(model, mnist):
     names = ("train", "validation", "test")

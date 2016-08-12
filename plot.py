@@ -2,9 +2,8 @@ import os
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-import moviepy.editor as movie
+import matplotlib.ticker as ticker
 import numpy as np
-
 
 def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
                save=True, name="subset", outdir="."):
@@ -14,28 +13,25 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
     rows = 2 * int(np.ceil(n / cols)) # doubled b/c input & reconstruction
 
     plt.figure(figsize = (cols * 2, rows * 2))
-    # plt.title("round {}: {}".format(model.step, name))
     dim = int(model.architecture[0]**0.5) # assume square images
+
+    def drawSubplot(x_, ax_):
+        plt.imshow(x_.reshape([dim, dim]), cmap="Greys")
+        if outlines:
+            ax_.get_xaxis().set_visible(False)
+            ax_.get_yaxis().set_visible(False)
+        else:
+            ax_.set_axis_off()
 
     for i, x in enumerate(x_in[:n], 1):
         # display original
         ax = plt.subplot(rows, cols, i) # rows, cols, subplot numbered from 1
-        plt.imshow(x.reshape([dim, dim]), cmap="Greys")
-        if outlines:
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-        else:
-            ax.set_axis_off()
+        drawSubplot(x, ax)
 
     for i, x in enumerate(x_reconstructed[:n], 1):
         # display reconstruction
         ax = plt.subplot(rows, cols, i + cols * (rows / 2))
-        plt.imshow(x.reshape([dim, dim]), cmap="Greys")
-        if outlines:
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-        else:
-            ax.set_axis_off()
+        drawSubplot(x, ax)
 
     plt.show()
     if save:
@@ -84,23 +80,36 @@ def plotInLatent(model, x_in, labels=[], range_=None, save=True, title=None,
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 
-def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, name="explore",
-                  outdir="."):
+def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), ppf=False,
+                  save=True, name="explore", outdir="."):
     """Util to explore low-dimensional manifold of latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
-    dim = int(model.architecture[0]**0.5)
+    # linear range; else inverse CDF [0, 1]
+    range_ = ((-1, 1) if ppf else range_)
     min_, max_ = range_
+    dim = int(model.architecture[0]**0.5)
 
     # complex number steps act like np.linspace
     # row, col indices (i, j) correspond to graph coords (y, x)
     # rollaxis enables iteration over latent space 2-tuples
     zs = np.rollaxis(np.mgrid[max_:min_:ny*1j, min_:max_:nx*1j], 0, 3)
+
+    if ppf: # sample from prior ~ N(0, 1)!
+        from scipy.stats import norm
+        DELTA = 1E-16 # delta to avoid +/- inf at 0, 1 boundaries
+        # ppf == percent point function == inverse cdf
+        zs = np.array([norm.ppf(np.clip(abs(z), DELTA, 1 - DELTA))
+                             for z in zs])
+
     canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
-                                    model.decode(z_row)]) for z_row in iter(zs)])
+                                    model.decode(z_row)])
+                        for z_row in iter(zs)])
 
     plt.figure(figsize=(10, 10))
     # `extent` sets axis labels corresponding to latent space coords
     plt.imshow(canvas, cmap="Greys", aspect="auto", extent=(range_ * 2))
+    if ppf: # no axis labels
+        plt.axis("off")
     plt.tight_layout()
 
     plt.show()
@@ -164,7 +173,9 @@ def latent_arithmetic(model, a, b, c, save=True, name="arithmetic", outdir="."):
 
 def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10,
                save=True, outdir="."):
+
     # TODO: random walk gif in latent space!
+    import moviepy.editor as movie
     dim = int(model.architecture[0]**0.5)
 
     def iterWalk(start):
@@ -204,7 +215,6 @@ def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10
         title = "{}_random_walk_{}_round_{}.mp4".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step)
         clip.write_videofile(os.path.join(outdir, title), fps=10)
-
 
 
 def freeAssociate(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10,
@@ -247,3 +257,20 @@ def freeAssociate(model, starting_pt=np.array([]), step_size=20, steps_till_turn
             title = "{}_dream_{}_round_{}.{}.png".format(
                 model.datetime, "_".join(map(str, model.architecture)), model.step, i)
             plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
+
+
+def justMNIST(x, name="digit", outdir="."):
+    DIM = 28
+    RANGE = (0, 28)
+    tick_spacing = 4
+
+    fig, ax = plt.subplots(1,1)
+    plt.imshow(x.reshape([DIM, DIM]), cmap="Greys",
+               extent=(RANGE * 2), interpolation="none")
+
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
+
+    if save:
+        title = "mnist_{}.png".format(name)
+        plt.savefig(os.path.join(outdir, title), bbox_inches="tight")

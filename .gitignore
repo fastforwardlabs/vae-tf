@@ -9,3 +9,5 @@ data
 out
 *.txt
 *.md
+*.swp
+blog

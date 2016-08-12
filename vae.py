@@ -116,29 +116,22 @@ class VAE():
         # rec_loss = VAE.l1_loss(x_reconstructed, x_in)
         # rec_loss = 0.5 * VAE.l2_loss(x_reconstructed, x_in) # "half of the euclidean error" = MSE
         # rec_loss = print_(rec_loss, "rec")
+
         # Kullback-Leibler divergence: mismatch b/w approximate vs. imposed/true posterior
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
         # kl_loss = print_(kl_loss, "kl")
-
-        # average over minibatch
-        # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
-        # cost = tf.reduce_mean(rec_loss + kl_loss, name="cost") # TODO: weighting ?
-        # cost = print_(cost, "cost")
 
         with tf.name_scope("l2_regularization"):
             regularizers = [tf.nn.l2_loss(var) for var in self.sesh.graph.get_collection(
                 "trainable_variables") if "weights" in var.name]
             l2_reg = self.lambda_l2_reg * tf.add_n(regularizers)
-            # l2_reg = print_(l2_reg, "l2")
 
-        # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
-        # alpha = 1. # TODO: weighting ?
-        # cost = tf.reduce_mean(alpha * rec_loss + kl_loss, name="cost")
         with tf.name_scope("cost"):
-            # average over batch # TODO
-            cost = tf.reduce_mean(self.temperature * rec_loss + self.kl_ratio * kl_loss, name="vae_cost")
+            # average over minibatch
+            cost = tf.reduce_mean(rec_loss + self.kl_ratio * kl_loss,
+                                  name="vae_cost")
             cost += l2_reg
-        # cost = print_(cost, "cost")
+            # cost = print_(cost, "cost")
 
         # optimization
         global_step = tf.Variable(0, trainable=False)
@@ -172,7 +165,7 @@ class VAE():
         with tf.name_scope("sample_gaussian"):
             # reparameterization trick
             epsilon = tf.random_normal(tf.shape(log_sigma), name="epsilon")
-            return mu + epsilon * tf.exp(log_sigma) # Norm(mu, sigma**2)
+            return mu + epsilon * tf.exp(log_sigma) # N(mu, I * sigma**2)
 
     @staticmethod
     def crossEntropy(obs, actual, offset=1e-7):
@@ -200,10 +193,10 @@ class VAE():
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
-        """Gaussian Kullback-Leibler divergence KL(q||p), per training example"""
+        """(Gaussian) Kullback-Leibler divergence KL(q||p), per training example"""
         # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
-            # = 0.5 * (1 + log(sigma**2) - mu**2 - sigma**2)
+            # = -0.5 * (1 + log(sigma**2) - mu**2 - sigma**2)
             return -0.5 * tf.reduce_sum(1 + 2 * log_sigma - mu**2 - tf.exp(2 * log_sigma), 1)
 
     def encode(self, x):
@@ -224,7 +217,7 @@ class VAE():
             is_tensor = lambda x: hasattr(x, "eval")
             zs = (self.sesh.run(zs) if is_tensor(zs) else zs) # coerce to np.array
             feed_dict.update({self.z_: zs})
-        # else, zs defaults to draw from conjugate prior z ~ Norm(0, I)
+        # else, zs defaults to draw from conjugate prior z ~ N(0, I)
         return self.sesh.run(self.x_reconstructed_, feed_dict=feed_dict)
 
     def vae(self, x):
@@ -233,7 +226,8 @@ class VAE():
         return self.decode(self.sampleGaussian(*self.encode(x)))
 
     def train(self, X, max_iter=np.inf, max_epochs=np.inf, cross_validate=True,
-              verbose=True, save=False, outdir="./out", plots_outdir="./png"):
+              verbose=True, save=False, outdir="./out", plots_outdir="./png",
+              plot_latent_over_time=False):
         if save:
             saver = tf.train.Saver(tf.all_variables())
 
@@ -242,10 +236,10 @@ class VAE():
             now = datetime.now().isoformat()[11:]
             print("------- Training begin: {} -------\n".format(now))
 
-            #######################################################################
-            # LOG TIME
-            pow_ = 0
-            #######################################################################
+            if plot_latent_over_time: # plot latent space over log_BASE time (i.e. training rounds)
+                BASE = 2
+                INCREMENT = 0.5
+                pow_ = 0 # initial power/exponent
 
             while True:
                 x, _ = X.train.next_batch(self.batch_size)
@@ -255,28 +249,20 @@ class VAE():
 
                 err_train += cost
 
-                #######################################################################
-                # PLOT LATENT OVER (LOG_2) TIME
-                # if 2**pow_ == i:
-                while int(round(2**pow_)) == i: # catch repeats
-                    plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
-                                       plots_outdir, name="explore_{}".format(pow_))
+                if plot_latent_over_time:
+                    while int(round(BASE**pow_)) == i:
+                        plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
+                                        plots_outdir, name="explore_{}".format(pow_))
 
-                    plot.plotInLatent(self, X.train.images, X.train.labels, range_=
-                                      (-8, 8), title="train", name="train_{}".format(pow_),
-                                      outdir=plots_outdir)
-                    # names = ("train", "validation", "test")
-                    # datasets = (X.train, X.validation, X.test)
-                    # for name, dataset in zip(names, datasets):
-                    #     plot.plotInLatent(self, dataset.images, dataset.labels, range_=
-                    #                       (-6, 6), name=name, outdir=plots_outdir)
+                        names = ("train", "validation", "test")
+                        datasets = (X.train, X.validation, X.test)
+                        for name, dataset in zip(names, datasets):
+                            plot.plotInLatent(self, dataset.images, dataset.labels, range_=
+                                              (-6, 6), title=name, outdir=plots_outdir,
+                                              name="{}_{}".format(name, pow_))
 
-                    print("2^{} = {}".format(pow_, i))
-                    pow_ += 0.5#1
-
-                if i%5000 == 0: # non-verbose monitoring
-                    print("round {} --> avg cost: ".format(i), err_train / i)
-                #######################################################################
+                        print("{}^{} = {}".format(BASE, pow_, i))
+                        pow += INCREMENT
 
                 if i%1000 == 0 and verbose:
                     print("round {} --> avg cost: ".format(i), err_train / i)
