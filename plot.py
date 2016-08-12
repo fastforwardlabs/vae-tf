@@ -44,15 +44,16 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 
-def plotInLatent(model, x_in, labels=[], range_=None, save=True, name="data",
-                 outdir="."):
+def plotInLatent(model, x_in, labels=[], range_=None, save=True, title=None,
+                 name="data", outdir="."):
     """Util to plot points in 2-D latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
+    title = (title if title else name)
     mus, _ = model.encode(x_in)
     ys, xs = mus.T
 
     plt.figure()
-    plt.title("round {}: {} in latent space".format(model.step, name))
+    plt.title("round {}: {} in latent space".format(model.step, title))
     kwargs = {'alpha': 0.8}
 
     classes = set(labels)
@@ -77,7 +78,7 @@ def plotInLatent(model, x_in, labels=[], range_=None, save=True, name="data",
 
     plt.show()
     if save:
-        title = "{}_latent_{}_round_{}_{}".format(
+        title = "{}_latent_{}_round_{}_{}.png".format(
             model.datetime, "_".join(map(str, model.architecture)),
             model.step, name)
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
@@ -206,12 +207,16 @@ def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10
 
 
 
-def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=10,
+def freeAssociate(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10,
                   save=True, outdir="."):
-    # TODO: random walk gif in latent space!
+    """TODO: util"""
     dim = int(model.architecture[0]**0.5)
 
-    def iterWalk(start):
+    if not starting_pt.any():
+        # if not specified, sample randomly from latent space
+        starting_pt = model.sesh.run(model.z_)
+
+    def iterWalk(start=starting_pt):
         """Yield points on random walk"""
         def step():
             """Equally sized step in random direction"""
@@ -221,17 +226,14 @@ def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=
 
         here = start
         yield here
+
         while True:
             next_step = step()
             for i in range(steps_till_turn):
                 here += next_step
                 yield here
 
-    if not starting_pt.any():
-        # if not specified, sample randomly from latent space
-        starting_pt = model.sesh.run(model.z_)
-
-    walk = iterWalk(starting_pt)
+    walk = iterWalk()
     for i in range(100):
         z = next(walk)
         x_reconstructed = model.decode(z).reshape([dim, dim])
@@ -242,6 +244,6 @@ def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=
 
         plt.show()
         if save:
-            title = "{}_random_walk_{}_round_{}.{}.png".format(
+            title = "{}_dream_{}_round_{}.{}.png".format(
                 model.datetime, "_".join(map(str, model.architecture)), model.step, i)
             plt.savefig(os.path.join(outdir, title), bbox_inches="tight")

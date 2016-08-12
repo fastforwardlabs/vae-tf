@@ -23,7 +23,8 @@ class VAE():
         "lambda_l2_reg": 0.,
         "nonlinearity": tf.nn.elu,
         "squashing": tf.nn.sigmoid,
-        "kl_ratio": 1.
+        "kl_ratio": 1.,
+        "temperature": 1.
     }
     RESTORE_KEY = "to_restore"
 
@@ -107,7 +108,7 @@ class VAE():
         # optimization
         # goal: find variational & generative parameters that best reconstruct x
         # == maximize log likelihood over observed datapoints
-        # == maximize variational lower bound on marginal log likelihoods of observed xs
+        # == maximize variational lower bound on "evidence" - i.e. marginal log likelihoods of observed xs
 
         # reconstruction loss: mismatch b/w x & x_reconstructed
         # binary cross-entropy -- assumes x & p(x|z) are iid Bernoullis
@@ -116,15 +117,13 @@ class VAE():
         # rec_loss = 0.5 * VAE.l2_loss(x_reconstructed, x_in) # "half of the euclidean error" = MSE
         # rec_loss = print_(rec_loss, "rec")
         # Kullback-Leibler divergence: mismatch b/w approximate vs. imposed/true posterior
-        # update variational distribution parameters / model's "wordview" to decrease "surprise"
-        # as per http://www.logarithmic.net/pfh/blog/01133823191 / http://ilab.usc.edu/surprise
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
         # kl_loss = print_(kl_loss, "kl")
 
         # average over minibatch
         # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
-        cost = tf.reduce_mean(0.5 * rec_loss + kl_loss, name="cost") # TODO: weighting ?
-        cost = print_(cost, "cost")
+        # cost = tf.reduce_mean(rec_loss + kl_loss, name="cost") # TODO: weighting ?
+        # cost = print_(cost, "cost")
 
         with tf.name_scope("l2_regularization"):
             regularizers = [tf.nn.l2_loss(var) for var in self.sesh.graph.get_collection(
@@ -132,17 +131,14 @@ class VAE():
             l2_reg = self.lambda_l2_reg * tf.add_n(regularizers)
             # l2_reg = print_(l2_reg, "l2")
 
-        # take mean over batch
         # weighting reconstruction loss by some alpha (0, 1) increases relative weight of prior
         # alpha = 1. # TODO: weighting ?
         # cost = tf.reduce_mean(alpha * rec_loss + kl_loss, name="cost")
         with tf.name_scope("cost"):
-            cost = tf.reduce_mean(rec_loss + self.kl_ratio * kl_loss,
-                                  name="vae_cost") + l2_reg
-        # cost = tf.add(rec_loss, kl_loss, name="cost")
+            # average over batch # TODO
+            cost = tf.reduce_mean(self.temperature * rec_loss + self.kl_ratio * kl_loss, name="vae_cost")
+            cost += l2_reg
         # cost = print_(cost, "cost")
-
-        # cost += l2_reg
 
         # optimization
         global_step = tf.Variable(0, trainable=False)
@@ -204,7 +200,7 @@ class VAE():
 
     @staticmethod
     def kullbackLeibler(mu, log_sigma):
-        """Kullback-Leibler divergence KL(q||p), per training example"""
+        """Gaussian Kullback-Leibler divergence KL(q||p), per training example"""
         # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
             # = 0.5 * (1 + log(sigma**2) - mu**2 - sigma**2)
@@ -262,17 +258,21 @@ class VAE():
                 #######################################################################
                 # PLOT LATENT OVER (LOG_2) TIME
                 # if 2**pow_ == i:
-                #     plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
-                #                        plots_outdir, name="explore_{}".format(pow_))
+                while int(round(2**pow_)) == i: # catch repeats
+                    plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
+                                       plots_outdir, name="explore_{}".format(pow_))
 
-                #     names = ("train", "validation", "test")
-                #     datasets = (X.train, X.validation, X.test)
-                #     for name, dataset in zip(names, datasets):
-                #         plot.plotInLatent(self, dataset.images, dataset.labels, range_=
-                #                           (-6, 6), name=name, outdir=plots_outdir)
+                    plot.plotInLatent(self, X.train.images, X.train.labels, range_=
+                                      (-8, 8), title="train", name="train_{}".format(pow_),
+                                      outdir=plots_outdir)
+                    # names = ("train", "validation", "test")
+                    # datasets = (X.train, X.validation, X.test)
+                    # for name, dataset in zip(names, datasets):
+                    #     plot.plotInLatent(self, dataset.images, dataset.labels, range_=
+                    #                       (-6, 6), name=name, outdir=plots_outdir)
 
-                #     print("2^{} = {}".format(pow_, i))
-                #     pow_ += 1
+                    print("2^{} = {}".format(pow_, i))
+                    pow_ += 0.5#1
 
                 if i%5000 == 0: # non-verbose monitoring
                     print("round {} --> avg cost: ".format(i), err_train / i)
