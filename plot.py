@@ -105,10 +105,14 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), ppf=False,
                                     model.decode(z_row)])
                         for z_row in iter(zs)])
 
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(nx / 2, ny / 2))
     # `extent` sets axis labels corresponding to latent space coords
     plt.imshow(canvas, cmap="Greys", aspect="auto", extent=(range_ * 2))
-    if ppf: # no axis labels
+    if ppf: # no axes
+        ax = plt.gca()
+        ax.set_frame_on(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
         plt.axis("off")
     plt.tight_layout()
 
