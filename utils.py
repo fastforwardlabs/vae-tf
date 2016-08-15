@@ -8,7 +8,7 @@ import tensorflow as tf
 def composeAll(*args):
     """Util for multiple function composition
 
-    i.e. composed = composeAll(f, g, h)
+    i.e. composed = composeAll([f, g, h])
          composed(x) # == f(g(h(x)))
     """
     # adapted from https://docs.python.org/3.1/howto/functional.html
