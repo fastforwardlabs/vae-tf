@@ -246,17 +246,78 @@ def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=
 
 
 def justMNIST(x, name="digit", outdir="."):
+    """Plot individual pixel-wise MNIST digit x"""
     DIM = 28
-    RANGE = (0, 28)
-    tick_spacing = 4
+    TICK_SPACING = 4
 
     fig, ax = plt.subplots(1,1)
     plt.imshow(x.reshape([DIM, DIM]), cmap="Greys",
-               extent=(RANGE * 2), interpolation="none")
+               extent=((0, DIM) * 2), interpolation="none")
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(TICK_SPACING))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(TICK_SPACING))
 
-    ax.xaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
-
+    plt.show()
     if save:
         title = "mnist_{}.png".format(name)
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
+
+
+def morph(model, zs=[None, None], n_per_morph=10, sinusoid=False, name="morph",
+          save=True, outdir="."):
+    '''
+    returns a list of img_data to represent morph between z1 and z2
+    default to linear morph, but can try sinusoid for more time near the anchor pts
+    n_total_frame must be >= 2, since by definition there's one frame for z1 and z2
+
+    list of zs (or random from prior if None)
+    '''
+    assert len(zs) > 1, "Must specify at least two latent pts for morph!"
+    dim = int(model.architecture[0]**0.5) # assume square images
+
+    def pairwise(iterable):
+        "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+        # via https://docs.python.org/dev/library/itertools.html
+        a, b = itertools.tee(iterable)
+        next(b, None)
+        return zip(a, b)
+
+    all_xs = []
+
+    for z1, z2 in pairwise(zs):
+        zs_morph = np.array([np.linspace(start, end, n_per_morph)
+                             # interpolate across every z dimension
+                             for start, end in zip(z1, z2)]).T
+        xs_reconstructed = model.decode(zs_morph)
+        # all_xs.append(xs_reconstructed)
+        all_xs.extend(xs_reconstructed)
+
+    # frames = np.hstack([x.reshape([dim, dim]) for x in all_xs])
+
+    for i, x in enumerate(all_xs):
+        plt.figure(figsize = (5, 5))
+        fig, ax = plt.subplots(1,1)
+        plt.imshow(x.reshape([DIM, DIM]), cmap="Greys")
+
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(TICK_SPACING))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(TICK_SPACING))
+
+
+        plt.show()
+        if save:
+            title = "{}_latent_{}_round_{}_{}.{}.png".format(
+                model.datetime, "_".join(map(str, model.architecture)),
+                model.step, name, i)
+            plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
+
+    # https://github.com/hardmaru/cppn-gan-vae-tensorflow/blob/master/sampler.py
+    # delta_z = 1.0 / (n_total_frame-1)
+    # diff_z = (z2-z1)
+    # img_data_array = []
+    # for i in range(n_total_frame):
+    #   percentage = delta_z * float(i)
+    #   factor = percentage
+    #   if sinusoid == True:
+    #     factor = np.sin(percentage*np.pi/2)
+    #   z = z1 + diff_z*factor
+    #   print "processing image ", i
+    #   img_data_array.append(self.generate(z, x_dim, y_dim, scale))
