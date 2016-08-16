@@ -37,15 +37,27 @@ def load_mnist():
     from tensorflow.examples.tutorials.mnist import input_data
     return input_data.read_data_sets("./data/MNIST_data")
 
+def get_mnist(n, mnist):
+    assert 0 <= n <= 9, "Must specify digit 0 - 9!"
+    for x, label in mnist.train.next_batch(100):
+        if label == n:
+            break
+    return x
+
 def all_plots(model, mnist):
     if model.architecture[-1] == 2: # only works for 2-D latent
         print("Plotting in latent space...")
         plot_all_in_latent(model, mnist)
         print("Exploring latent...")
         plot.exploreLatent(model, nx=20, ny=20, range_=(-4, 4), outdir=PLOTS_DIR)
+        plot.exploreLatent(model, nx=40, ny=40, ppf=True, name="explore_ppf",
+                           outdir=PLOTS_DIR)
 
     print("Interpolating...")
     interpolate_digits(model, mnist)
+
+    print("Plotting end-to-end reconstructions...")
+    plot_all_end_to_end(model, mnist)
 
     # print("Latent vector arithmetic...")
     # ORIG, TARGET = "A", "X"
@@ -54,8 +66,10 @@ def all_plots(model, mnist):
     # # chars[0] - chars[1] + chars[2]
     # plot.latent_arithmetic(model, *[np.expand_dims(c, 0) for c in chars], name=
     #                        "{}-{}+{}".format(ORIG, ORIG, TARGET), outdir=PLOTS_DIR)
-    for i in range(10):
-        plot.justMNIST(*mnist.train.next_batch(1), outdir=PLOTS_DIR)
+
+    # print("Plotting 10 MNIST digits...")
+    # for i in range(10):
+    #     plot.justMNIST(*mnist.train.next_batch(1), outdir=PLOTS_DIR)
 
 def plot_all_in_latent(model, mnist):
     names = ("train", "validation", "test")
@@ -76,11 +90,19 @@ def plot_all_end_to_end(model, mnist):
     datasets = (mnist.train, mnist.validation, mnist.test)
     for name, dataset in zip(names, datasets):
         x, _ = dataset.next_batch(10)
-        #feed_dict = {model.x_in: x}
-        #fetches = model.x_reconstructed
-        #x_reconstructed = model.sesh.run(fetches, feed_dict)
         x_reconstructed = model.vae(x)
-        plot.plotSubset(model, x, x_reconstructed, n=10, name=name, outdir=PLOTS_DIR)
+        plot.plotSubset(model, x, x_reconstructed, n=10, name=name,
+                        outdir=PLOTS_DIR)
+
+def morph_numbers(model, mnist, ns=None):
+    if not ns:
+        import random
+        ns = random.shuffle(list(range(10)))
+
+    xs = [get_mnist(n, mnist) for n in ns]
+    mus, _ = model.encode(xs)
+    plot.morph(model, mus, n_per_morph=10, sinusoid=False,
+               name="morph_{}".format("".join(ns)), outdir=PLOTS_DIR)
 
 def test_mnist(to_reload=None):
     mnist = load_mnist()
@@ -96,12 +118,8 @@ def test_mnist(to_reload=None):
                 save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
         print("Trained!")
 
-    plot.exploreLatent(v, nx=26, ny=26, range_=(-4,4), outdir=PLOTS_DIR, name="explore_final")
-
-    # plot.freeAssociate(v, outdir=PLOTS_DIR)
-    # plot_all_end_to_end(v, mnist)
     #all_plots(v, mnist)
-    #plot.randomWalk(v)
+    morph_numbers(v, mnist)#, ns=None)
 
 
 if __name__ == "__main__":
@@ -113,5 +131,5 @@ if __name__ == "__main__":
         except(FileExistsError):
             pass
 
-    test_mnist()
-    # test_mnist(to_reload="./out/mnist/160801_1234_vae_784_500_500_50-20000")
+    # test_mnist()
+    test_mnist(to_reload="./out/mnist/160801_1234_vae_784_500_500_50-20000")
