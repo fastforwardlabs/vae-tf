@@ -18,8 +18,8 @@ ARCHITECTURE = [IMG_DIM**2, # 784 pixels
 HYPERPARAMS = {
     "batch_size": 128,
     "learning_rate": 5E-4,#1E-3,
-    "dropout": 0.9,
-    "lambda_l2_reg": 1E-4,
+    "dropout": 0.9,#0.8,
+    "lambda_l2_reg": 1E-5,#1E-4,
     "nonlinearity": tf.nn.elu,
     "squashing": tf.nn.sigmoid,
     "kl_ratio": 1
@@ -96,7 +96,9 @@ def test_mnist(to_reload=None):
                 save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
         print("Trained!")
 
-    plot.freeAssociate(v, outdir=PLOTS_DIR)
+    plot.exploreLatent(v, nx=26, ny=26, range_=(-4,4), outdir=PLOTS_DIR, name="explore_final")
+
+    # plot.freeAssociate(v, outdir=PLOTS_DIR)
     # plot_all_end_to_end(v, mnist)
     #all_plots(v, mnist)
     #plot.randomWalk(v)

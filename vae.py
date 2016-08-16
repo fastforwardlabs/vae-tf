@@ -23,7 +23,8 @@ class VAE():
         "lambda_l2_reg": 0.,
         "nonlinearity": tf.nn.elu,
         "squashing": tf.nn.sigmoid,
-        "kl_ratio": 1.
+        "kl_ratio": 1.,
+        "temperature": 1.
     }
     RESTORE_KEY = "to_restore"
 
@@ -107,7 +108,7 @@ class VAE():
         # optimization
         # goal: find variational & generative parameters that best reconstruct x
         # == maximize log likelihood over observed datapoints
-        # == maximize variational lower bound on marginal log likelihoods of observed xs
+        # == maximize variational lower bound on "evidence" - i.e. marginal log likelihoods of observed xs
 
         # reconstruction loss: mismatch b/w x & x_reconstructed
         # binary cross-entropy -- assumes x & p(x|z) are iid Bernoullis

@@ -40,8 +40,8 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 
-def plotInLatent(model, x_in, labels=[], range_=None, save=True, name="data",
-                 title=None, outdir="."):
+def plotInLatent(model, x_in, labels=[], range_=None, save=True, title=None,
+                 name="data", outdir="."):
     """Util to plot points in 2-D latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
     title = (title if title else name)
@@ -74,29 +74,46 @@ def plotInLatent(model, x_in, labels=[], range_=None, save=True, name="data",
 
     plt.show()
     if save:
-        title = "{}_latent_{}_round_{}_{}".format(
+        title = "{}_latent_{}_round_{}_{}.png".format(
             model.datetime, "_".join(map(str, model.architecture)),
             model.step, name)
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 
-def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), save=True, name="explore",
-                  outdir="."):
+def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), ppf=False,
+                  save=True, name="explore", outdir="."):
     """Util to explore low-dimensional manifold of latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
-    dim = int(model.architecture[0]**0.5)
+    # linear range; else inverse CDF [0, 1]
+    range_ = ((-1, 1) if ppf else range_)
     min_, max_ = range_
+    dim = int(model.architecture[0]**0.5)
 
     # complex number steps act like np.linspace
     # row, col indices (i, j) correspond to graph coords (y, x)
     # rollaxis enables iteration over latent space 2-tuples
     zs = np.rollaxis(np.mgrid[max_:min_:ny*1j, min_:max_:nx*1j], 0, 3)
-    canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
-                                    model.decode(z_row)]) for z_row in iter(zs)])
 
-    plt.figure(figsize=(10, 10))
+    if ppf: # sample from prior ~ N(0, 1)!
+        from scipy.stats import norm
+        DELTA = 1E-16 # delta to avoid +/- inf at 0, 1 boundaries
+        # ppf == percent point function == inverse cdf
+        zs = np.array([norm.ppf(np.clip(abs(z), DELTA, 1 - DELTA))
+                             for z in zs])
+
+    canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
+                                    model.decode(z_row)])
+                        for z_row in iter(zs)])
+
+    plt.figure(figsize=(nx / 2, ny / 2))
     # `extent` sets axis labels corresponding to latent space coords
     plt.imshow(canvas, cmap="Greys", aspect="auto", extent=(range_ * 2))
+    if ppf: # no axes
+        ax = plt.gca()
+        ax.set_frame_on(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        plt.axis("off")
     plt.tight_layout()
 
     plt.show()
@@ -204,12 +221,16 @@ def randomWalk(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10
         clip.write_videofile(os.path.join(outdir, title), fps=10)
 
 
-def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=10,
+def freeAssociate(model, starting_pt=np.array([]), step_size=20, steps_till_turn=10,
                   save=True, outdir="."):
-    # TODO: random walk gif in latent space!
+    """TODO: util"""
     dim = int(model.architecture[0]**0.5)
 
-    def iterWalk(start):
+    if not starting_pt.any():
+        # if not specified, sample randomly from latent space
+        starting_pt = model.sesh.run(model.z_)
+
+    def iterWalk(start=starting_pt):
         """Yield points on random walk"""
         def step():
             """Equally sized step in random direction"""
@@ -219,17 +240,14 @@ def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=
 
         here = start
         yield here
+
         while True:
             next_step = step()
             for i in range(steps_till_turn):
                 here += next_step
                 yield here
 
-    if not starting_pt.any():
-        # if not specified, sample randomly from latent space
-        starting_pt = model.sesh.run(model.z_)
-
-    walk = iterWalk(starting_pt)
+    walk = iterWalk()
     for i in range(100):
         z = next(walk)
         x_reconstructed = model.decode(z).reshape([dim, dim])
@@ -240,7 +258,7 @@ def freeAssociate(model, starting_pt=np.array([]), step_size=2, steps_till_turn=
 
         plt.show()
         if save:
-            title = "{}_random_walk_{}_round_{}.{}.png".format(
+            title = "{}_dream_{}_round_{}.{}.png".format(
                 model.datetime, "_".join(map(str, model.architecture)), model.step, i)
             plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
