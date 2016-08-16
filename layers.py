@@ -13,7 +13,7 @@ class Dense():
         self.nonlinearity = nonlinearity
 
     def __call__(self, x):
-        """Dense layer currying, to appy specified layer to any input tensor `x`"""
+        """Dense layer currying, to apply layer to any input tensor `x`"""
         # tf.Tensor -> tf.Tensor
         with tf.name_scope(self.scope):
             while True:
