@@ -85,7 +85,7 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), ppf=False,
     """Util to explore low-dimensional manifold of latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
     # linear range; else inverse CDF [0, 1]
-    range_ = ((-1, 1) if ppf else range_)
+    range_ = ((0, 1) if ppf else range_)
     min_, max_ = range_
     dim = int(model.architecture[0]**0.5)
 
@@ -98,8 +98,7 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), ppf=False,
         from scipy.stats import norm
         DELTA = 1E-16 # delta to avoid +/- inf at 0, 1 boundaries
         # ppf == percent point function == inverse cdf
-        zs = np.array([norm.ppf(np.clip(abs(z), DELTA, 1 - DELTA))
-                             for z in zs])
+        zs = np.array([norm.ppf(np.clip(z, DELTA, 1 - DELTA)) for z in zs])
 
     canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
                                     model.decode(z_row)])
