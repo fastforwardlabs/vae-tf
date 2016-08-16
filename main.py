@@ -39,7 +39,8 @@ def load_mnist():
 
 def get_mnist(n, mnist):
     assert 0 <= n <= 9, "Must specify digit 0 - 9!"
-    for x, label in mnist.train.next_batch(100):
+    while True:
+        x, label = mnist.train.next_batch(1)
         if label == n:
             break
     return x
@@ -97,12 +98,12 @@ def plot_all_end_to_end(model, mnist):
 def morph_numbers(model, mnist, ns=None):
     if not ns:
         import random
-        ns = random.shuffle(list(range(10)))
+        ns = random.sample(range(10), 10) # non-in-place shuffle
 
-    xs = [get_mnist(n, mnist) for n in ns]
+    xs = np.squeeze([get_mnist(n, mnist) for n in ns])
     mus, _ = model.encode(xs)
-    plot.morph(model, mus, n_per_morph=10, sinusoid=False,
-               name="morph_{}".format("".join(ns)), outdir=PLOTS_DIR)
+    plot.morph(model, mus, n_per_morph=10, sinusoid=False, outdir=PLOTS_DIR,
+               name="morph_{}".format("".join(str(n) for n in ns)))
 
 def test_mnist(to_reload=None):
     mnist = load_mnist()
