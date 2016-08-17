@@ -23,8 +23,6 @@ class VAE():
         "lambda_l2_reg": 0.,
         "nonlinearity": tf.nn.elu,
         "squashing": tf.nn.sigmoid,
-        "kl_ratio": 1.,
-        "temperature": 1.
     }
     RESTORE_KEY = "to_restore"
 
@@ -128,8 +126,7 @@ class VAE():
 
         with tf.name_scope("cost"):
             # average over minibatch
-            cost = tf.reduce_mean(rec_loss + self.kl_ratio * kl_loss,
-                                  name="vae_cost")
+            cost = tf.reduce_mean(rec_loss + kl_loss, name="vae_cost")
             cost += l2_reg
             # cost = print_(cost, "cost")
 
@@ -213,7 +210,7 @@ class VAE():
         """
         # (np.array | tf.Variable) -> np.array
         feed_dict = dict()
-        if zs != None:
+        if zs is not None:
             is_tensor = lambda x: hasattr(x, "eval")
             zs = (self.sesh.run(zs) if is_tensor(zs) else zs) # coerce to np.array
             feed_dict.update({self.z_: zs})
@@ -251,8 +248,8 @@ class VAE():
 
                 if plot_latent_over_time:
                     while int(round(BASE**pow_)) == i:
-                        plot.exploreLatent(self, nx=20, ny=20, range_=(-4, 4), outdir=
-                                        plots_outdir, name="explore_{}".format(pow_))
+                        plot.exploreLatent(self, nx=30, ny=30, ppf=True, outdir=
+                                        plots_outdir, name="explore_ppf30_{}".format(pow_))
 
                         names = ("train", "validation", "test")
                         datasets = (X.train, X.validation, X.test)
@@ -262,7 +259,7 @@ class VAE():
                                               name="{}_{}".format(name, pow_))
 
                         print("{}^{} = {}".format(BASE, pow_, i))
-                        pow += INCREMENT
+                        pow_ += INCREMENT
 
                 if i%1000 == 0 and verbose:
                     print("round {} --> avg cost: ".format(i), err_train / i)

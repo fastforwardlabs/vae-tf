@@ -35,7 +35,7 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
         ax = plt.subplot(rows, cols, i + cols * (rows / 2))
         drawSubplot(x, ax)
 
-    plt.show()
+    # plt.show()
     if save:
         title = "{}_batch_{}_round_{}_{}.png".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step, name)
@@ -74,7 +74,7 @@ def plotInLatent(model, x_in, labels=[], range_=None, save=True, title=None,
         plt.xlim(*range_)
         plt.ylim(*range_)
 
-    plt.show()
+    # plt.show()
     if save:
         title = "{}_latent_{}_round_{}_{}.png".format(
             model.datetime, "_".join(map(str, model.architecture)),
@@ -117,7 +117,7 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), ppf=False,
         plt.axis("off")
     plt.tight_layout()
 
-    plt.show()
+    # plt.show()
     if save:
         title = "{}_latent_{}_round_{}_{}.png".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step, name)
@@ -138,7 +138,7 @@ def interpolate(model, latent_1, latent_2, n=20, save=True, name="interpolate", 
     plt.axis("off")
     plt.tight_layout()
 
-    plt.show()
+    # plt.show()
     if save:
         title = "{}_latent_{}_round_{}_{}".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step, name)
@@ -169,7 +169,7 @@ def latent_arithmetic(model, a, b, c, save=True, name="arithmetic", outdir="."):
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
-    plt.show()
+    # plt.show()
     if save:
         title = "{}_latent_{}_round_{}_{}.png".format(
             model.datetime, "_".join(map(str, model.architecture)), model.step, name)
@@ -187,7 +187,7 @@ def justMNIST(x, name="digit", outdir="."):
     ax.xaxis.set_major_locator(ticker.MultipleLocator(TICK_SPACING))
     ax.yaxis.set_major_locator(ticker.MultipleLocator(TICK_SPACING))
 
-    plt.show()
+    # plt.show()
     if save:
         title = "mnist_{}.png".format(name)
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
@@ -228,7 +228,7 @@ def morph(model, zs, n_per_morph=10, loop=True, #sinusoid=False,
         ax.set_yticks([])
         plt.axis("off")
 
-        plt.show()
+        # plt.show()
         if save:
             title = "{}_latent_{}_round_{}_{}.{}.png".format(
                 model.datetime, "_".join(map(str, model.architecture)),

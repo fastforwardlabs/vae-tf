@@ -20,7 +20,7 @@ class Dense():
                 try: # reuse weights if already initialized
                     return self.nonlinearity(tf.matmul(x, self.w) + self.b)
                 except(AttributeError):
-                    self.w, self.b = Layer.wbVars(x.get_shape()[1].value, self.size)
+                    self.w, self.b = self.wbVars(x.get_shape()[1].value, self.size)
                     self.w = tf.nn.dropout(self.w, self.dropout)
 
     @staticmethod

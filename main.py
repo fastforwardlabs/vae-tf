@@ -11,8 +11,8 @@ IMG_DIM = 28
 
 ARCHITECTURE = [IMG_DIM**2, # 784 pixels
                 500, 500, # intermediate encoding
-                #2] # latent space dims
-                50]
+                2] # latent space dims
+                # 50]
 # (and symmetrically back out again)
 
 HYPERPARAMS = {
@@ -22,10 +22,9 @@ HYPERPARAMS = {
     "lambda_l2_reg": 1E-5,#1E-4,
     "nonlinearity": tf.nn.elu,
     "squashing": tf.nn.sigmoid,
-    "kl_ratio": 1
 }
 
-MAX_ITER = 2**17#20000#1E5#20000
+MAX_ITER = 2**16#20000#1E5#20000
 MAX_EPOCHS = np.inf#100
 
 LOG_DIR = "./log/mnist"
@@ -39,11 +38,22 @@ def load_mnist():
 
 def get_mnist(n, mnist):
     assert 0 <= n <= 9, "Must specify digit 0 - 9!"
-    while True:
-        x, label = mnist.train.next_batch(1)
-        if label == n:
-            break
-    return x
+    import random
+
+    SIZE = 500
+    imgs, labels = mnist.train.next_batch(SIZE)
+    idxs = iter(random.sample(range(SIZE), SIZE)) # non-in-place shuffle
+
+    for i in idxs:
+        if labels[i] == n:
+            return imgs[i] # return first match
+
+    # x, label = mnist.train.next_batch(1)
+    # while True:
+    #     x, label = mnist.train.next_batch(1)
+    #     if label == n:
+    #         break
+    # return x
 
 def all_plots(model, mnist):
     if model.architecture[-1] == 2: # only works for 2-D latent
@@ -51,8 +61,11 @@ def all_plots(model, mnist):
         plot_all_in_latent(model, mnist)
         print("Exploring latent...")
         plot.exploreLatent(model, nx=20, ny=20, range_=(-4, 4), outdir=PLOTS_DIR)
-        plot.exploreLatent(model, nx=40, ny=40, ppf=True, name="explore_ppf",
-                           outdir=PLOTS_DIR)
+        # plot.exploreLatent(model, nx=40, ny=40, ppf=True, name="explore_ppf",
+        #                    outdir=PLOTS_DIR)
+        for n in (24, 30, 60, 100):
+            plot.exploreLatent(model, nx=n, ny=n, ppf=True, outdir=PLOTS_DIR,
+                               name="explore_ppf{}".format(n))
 
     print("Interpolating...")
     interpolate_digits(model, mnist)
@@ -102,7 +115,7 @@ def morph_numbers(model, mnist, ns=None):
 
     xs = np.squeeze([get_mnist(n, mnist) for n in ns])
     mus, _ = model.encode(xs)
-    plot.morph(model, mus, n_per_morph=10, sinusoid=False, outdir=PLOTS_DIR,
+    plot.morph(model, mus, n_per_morph=10, outdir=PLOTS_DIR,
                name="morph_{}".format("".join(str(n) for n in ns)))
 
 def test_mnist(to_reload=None):
@@ -116,11 +129,15 @@ def test_mnist(to_reload=None):
         v = vae.VAE(ARCHITECTURE, HYPERPARAMS, log_dir=LOG_DIR)
         v.train(mnist, max_iter=MAX_ITER, max_epochs=MAX_EPOCHS, cross_validate=False,
                 verbose=False,#True,
-                save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR)
+                save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR,
+                plot_latent_over_time=True)
         print("Trained!")
 
     #all_plots(v, mnist)
-    morph_numbers(v, mnist)#, ns=None)
+    # morph_numbers(v, mnist, [4,7,3,0,8,1,6,9,5,2])
+    for n in (24, 30, 60, 100):
+        plot.exploreLatent(v, nx=n, ny=n, ppf=True, outdir=PLOTS_DIR,
+                            name="explore_ppf{}".format(n))
 
 
 if __name__ == "__main__":
@@ -133,4 +150,6 @@ if __name__ == "__main__":
             pass
 
     # test_mnist()
-    test_mnist(to_reload="./out/mnist/160801_1234_vae_784_500_500_50-20000")
+    # test_mnist(to_reload="./out/mnist/160801_1234_vae_784_500_500_50-20000")
+    # test_mnist(to_reload="./out/mnist/160816_1754_vae_784_500_500_50-65536")
+    test_mnist(to_reload="./out/mnist/160816_1813_vae_784_500_500_2-65536")
