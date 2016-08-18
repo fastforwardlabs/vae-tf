@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import re
 import sys
 
 import numpy as np
@@ -22,7 +23,7 @@ class VAE():
         "dropout": 1.,
         "lambda_l2_reg": 0.,
         "nonlinearity": tf.nn.elu,
-        "squashing": tf.nn.sigmoid,
+        "squashing": tf.nn.sigmoid
     }
     RESTORE_KEY = "to_restore"
 
@@ -49,7 +50,11 @@ class VAE():
             self.sesh.run(tf.initialize_all_variables())
 
         else: # restore saved model
-            self.datetime = "{}_reloaded".format(os.path.basename(meta_graph)[:11])
+            datetime, name = os.path.basename(meta_graph).split("_vae_")
+            self.datetime = "{}_reloaded".format(datetime)
+            *model_architecture, _ = re.split("_|-", name)
+            assert [int(n) for n in model_architecture] == self.architecture, \
+                "Architecture must match saved model!"
             # rebuild graph
             meta_graph = os.path.abspath(meta_graph)
             tf.train.import_meta_graph(meta_graph + ".meta").restore(
@@ -84,6 +89,7 @@ class VAE():
         # z ~ N(z_mean, np.exp(z_log_sigma)**2)
         z_mean = Dense("z_mean", self.architecture[-1], dropout)(h_encoded)
         z_log_sigma = Dense("z_log_sigma", self.architecture[-1], dropout)(h_encoded)
+
         # kingma & welling: only 1 draw necessary as long as minibatch large enough (>100)
         z = self.sampleGaussian(z_mean, z_log_sigma)
 
@@ -102,21 +108,12 @@ class VAE():
                                          name="latent_in")
         x_reconstructed_ = composeAll(decoding)(z_)
 
-        # optimization
-        # goal: find variational & generative parameters that best reconstruct x
-        # == maximize log likelihood over observed datapoints
-        # == maximize variational lower bound on "evidence" - i.e. marginal log likelihoods of observed xs
-
         # reconstruction loss: mismatch b/w x & x_reconstructed
         # binary cross-entropy -- assumes x & p(x|z) are iid Bernoullis
         rec_loss = VAE.crossEntropy(x_reconstructed, x_in)
-        # rec_loss = VAE.l1_loss(x_reconstructed, x_in)
-        # rec_loss = 0.5 * VAE.l2_loss(x_reconstructed, x_in) # "half of the euclidean error" = MSE
-        # rec_loss = print_(rec_loss, "rec")
 
         # Kullback-Leibler divergence: mismatch b/w approximate vs. imposed/true posterior
         kl_loss = VAE.kullbackLeibler(z_mean, z_log_sigma)
-        # kl_loss = print_(kl_loss, "kl")
 
         with tf.name_scope("l2_regularization"):
             regularizers = [tf.nn.l2_loss(var) for var in self.sesh.graph.get_collection(
@@ -127,23 +124,17 @@ class VAE():
             # average over minibatch
             cost = tf.reduce_mean(rec_loss + kl_loss, name="vae_cost")
             cost += l2_reg
-            # cost = print_(cost, "cost")
 
         # optimization
         global_step = tf.Variable(0, trainable=False)
         with tf.name_scope("Adam_optimizer"):
-            optimizer = tf.train.AdamOptimizer(self.learning_rate)#, epsilon=1.)
+            optimizer = tf.train.AdamOptimizer(self.learning_rate)
             tvars = tf.trainable_variables()
             grads_and_vars = optimizer.compute_gradients(cost, tvars)
             clipped = [(tf.clip_by_value(grad, -5, 5), tvar) # gradient clipping
                     for grad, tvar in grads_and_vars]
             train_op = optimizer.apply_gradients(clipped, global_step=global_step,
                                                  name="minimize_cost")
-            # #train_op = optimizer.apply_gradients(list(zip(grads, tvars)))
-            # train_op = (tf.train.AdamOptimizer(self.learning_rate)
-            #                     .minimize(cost))
-
-        # self.numerics = tf.add_check_numerics_ops()
 
         # ops to directly explore latent space
         # defaults to prior z ~ N(0, I)
@@ -193,7 +184,8 @@ class VAE():
         # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
             # = -0.5 * (1 + log(sigma**2) - mu**2 - sigma**2)
-            return -0.5 * tf.reduce_sum(1 + 2 * log_sigma - mu**2 - tf.exp(2 * log_sigma), 1)
+            return -0.5 * tf.reduce_sum(1 + 2 * log_sigma - mu**2 -
+                                        tf.exp(2 * log_sigma), 1)
 
     def encode(self, x):
         """Probabilistic encoder from inputs to latent distribution parameters;
@@ -222,7 +214,7 @@ class VAE():
         return self.decode(self.sampleGaussian(*self.encode(x)))
 
     def train(self, X, max_iter=np.inf, max_epochs=np.inf, cross_validate=True,
-              verbose=True, save=False, outdir="./out", plots_outdir="./png",
+              verbose=True, save=True, outdir="./out", plots_outdir="./png",
               plot_latent_over_time=False):
         if save:
             saver = tf.train.Saver(tf.all_variables())
@@ -232,10 +224,10 @@ class VAE():
             now = datetime.now().isoformat()[11:]
             print("------- Training begin: {} -------\n".format(now))
 
-            if plot_latent_over_time: # plot latent space over log_BASE time (i.e. training rounds)
+            if plot_latent_over_time: # plot latent space over log_BASE time
                 BASE = 2
                 INCREMENT = 0.5
-                pow_ = 0 # initial power/exponent
+                pow_ = 0
 
             while True:
                 x, _ = X.train.next_batch(self.batch_size)
@@ -247,8 +239,8 @@ class VAE():
 
                 if plot_latent_over_time:
                     while int(round(BASE**pow_)) == i:
-                        plot.exploreLatent(self, nx=30, ny=30, ppf=True, outdir=
-                                        plots_outdir, name="explore_ppf30_{}".format(pow_))
+                        plot.exploreLatent(self, nx=30, ny=30, ppf=True, outdir=plots_outdir,
+                                           name="explore_ppf30_{}".format(pow_))
 
                         names = ("train", "validation", "test")
                         datasets = (X.train, X.validation, X.test)

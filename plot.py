@@ -42,8 +42,8 @@ def plotSubset(model, x_in, x_reconstructed, n=10, cols=None, outlines=True,
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 
-def plotInLatent(model, x_in, labels=[], range_=None, save=True, title=None,
-                 name="data", outdir="."):
+def plotInLatent(model, x_in, labels=[], range_=None, title=None,
+                 save=True, name="data", outdir="."):
     """Util to plot points in 2-D latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
     title = (title if title else name)
@@ -86,7 +86,7 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), ppf=False,
                   save=True, name="explore", outdir="."):
     """Util to explore low-dimensional manifold of latent space"""
     assert model.architecture[-1] == 2, "2-D plotting only works for latent space in R2!"
-    # linear range; else ppf (percent point function) == inverse CDF [0, 1]
+    # linear range; else ppf (percent point function) == inverse CDF from [0, 1]
     range_ = ((0, 1) if ppf else range_)
     min_, max_ = range_
     dim = int(model.architecture[0]**0.5)
@@ -99,11 +99,10 @@ def exploreLatent(model, nx=20, ny=20, range_=(-4, 4), ppf=False,
     if ppf: # sample from prior ~ N(0, 1)
         from scipy.stats import norm
         DELTA = 1E-16 # delta to avoid +/- inf at 0, 1 boundaries
-        # ppf == percent point function == inverse cdf
         zs = np.array([norm.ppf(np.clip(z, DELTA, 1 - DELTA)) for z in zs])
 
-    canvas = np.vstack([np.hstack([x.reshape([dim, dim]) for x in
-                                    model.decode(z_row)])
+    canvas = np.vstack([np.hstack([x.reshape([dim, dim])
+                                   for x in model.decode(z_row)])
                         for z_row in iter(zs)])
 
     plt.figure(figsize=(nx / 2, ny / 2))
@@ -145,39 +144,8 @@ def interpolate(model, latent_1, latent_2, n=20, save=True, name="interpolate", 
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 
-def latent_arithmetic(model, a, b, c, save=True, name="arithmetic", outdir="."):
-    """Util to implement vector math in latent space equivalent to (a - b + c)"""
-    inputs = (a, b, c)
-    a_, b_, c_ = (model.sampleGaussian(*model.encode(vec)) for vec in inputs)
-    d = model.decode(a_ - b_ + c_)
-
-    plt.figure(figsize = (5, 4))
-    plt.title("a + b - c = ...")
-    # assume square images
-    dim = int(model.architecture[0]**0.5)
-
-    for i, img in enumerate(inputs):
-        # inputs to latent vector arithmetic
-        ax = plt.subplot(2, 3, i + 1) # rows, cols, subplot numbered from 1
-        plt.imshow(img.reshape([dim, dim]), cmap="Greys")
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
-
-    # display output
-    ax = plt.subplot(2, 3, 5)
-    plt.imshow(d.reshape([dim, dim]), cmap="Greys")
-    ax.get_xaxis().set_visible(False)
-    ax.get_yaxis().set_visible(False)
-
-    # plt.show()
-    if save:
-        title = "{}_latent_{}_round_{}_{}.png".format(
-            model.datetime, "_".join(map(str, model.architecture)), model.step, name)
-        plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
-
-
-def justMNIST(x, name="digit", outdir="."):
-    """Plot individual pixel-wise MNIST digit x"""
+def justMNIST(x, save=True, name="digit", outdir="."):
+    """Plot individual pixel-wise MNIST digit vector x"""
     DIM = 28
     TICK_SPACING = 4
 
@@ -193,14 +161,13 @@ def justMNIST(x, name="digit", outdir="."):
         plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
 
 
-def morph(model, zs, n_per_morph=10, loop=True, #sinusoid=False,
-          name="morph", save=True, outdir="."):
+def morph(model, zs, n_per_morph=10, loop=True, save=True, name="morph", outdir="."):
     """Plot frames of morph between zs (np.array of 2+ latent points)"""
     assert len(zs) > 1, "Must specify at least two latent pts for morph!"
     dim = int(model.architecture[0]**0.5) # assume square images
 
     def pairwise(iterable):
-        "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+        """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
         # via https://docs.python.org/dev/library/itertools.html
         a, b = itertools.tee(iterable)
         next(b, None)
@@ -234,15 +201,3 @@ def morph(model, zs, n_per_morph=10, loop=True, #sinusoid=False,
                 model.datetime, "_".join(map(str, model.architecture)),
                 model.step, name, i)
             plt.savefig(os.path.join(outdir, title), bbox_inches="tight")
-
-    # TODO: sinusoidal spacing? == more time near anchor points
-    # https://github.com/hardmaru/cppn-gan-vae-tensorflow/blob/master/sampler.py
-    # delta_z = 1.0 / (n_total_frame-1)
-    # diff_z = (z2-z1)
-    # img_data_array = []
-    # for i in range(n_total_frame):
-    #   percentage = delta_z * float(i)
-    #   factor = percentage
-    #   if sinusoid == True:
-    #     factor = np.sin(percentage*np.pi/2)
-    #   z = z1 + diff_z*factor

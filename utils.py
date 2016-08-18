@@ -15,11 +15,9 @@ def composeAll(*args):
 
 def print_(var, name: str, first_n=5, summarize=5):
     """Util for debugging, by printing values of tf.Variable `var` during training"""
-        return tf.Print(var, [var], '{}: '.format(name), first_n=first_n,
-                        summarize=summarize)
-    except(TypeError): # variables are already in a list
-        return tf.Print(var, var, '{}: '.format(name), first_n=first_n,
-                        summarize=summarize)
+    # (tf.Tensor, str, int, int) -> tf.Tensor
+    return tf.Print(var, [var], "{}: ".format(name), first_n=first_n,
+                    summarize=summarize)
 
 def get_mnist(n, mnist):
     """Returns 784-D numpy array for random MNIST digit `n`"""
@@ -32,11 +30,4 @@ def get_mnist(n, mnist):
 
     for i in idxs:
         if labels[i] == n:
-            return imgs[i] # return first match
-
-    # x, label = mnist.train.next_batch(1)
-    # while True:
-    #     x, label = mnist.train.next_batch(1)
-    #     if label == n:
-    #         break
-    # return x
+            return imgs[i] # first match
