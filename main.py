@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 import plot
+from utils import get_mnist
 import vae
 
 
@@ -27,33 +28,14 @@ HYPERPARAMS = {
 MAX_ITER = 2**16#20000#1E5#20000
 MAX_EPOCHS = np.inf#100
 
-LOG_DIR = "./log/mnist"
-METAGRAPH_DIR = "./out/mnist"
-PLOTS_DIR = "./png/mnist"
+LOG_DIR = "./log/mnist" # "./log"
+METAGRAPH_DIR = "./out/mnist" # "./out"
+PLOTS_DIR = "./png/mnist" # "./plots"
 
 
 def load_mnist():
     from tensorflow.examples.tutorials.mnist import input_data
-    return input_data.read_data_sets("./data/MNIST_data")
-
-def get_mnist(n, mnist):
-    assert 0 <= n <= 9, "Must specify digit 0 - 9!"
-    import random
-
-    SIZE = 500
-    imgs, labels = mnist.train.next_batch(SIZE)
-    idxs = iter(random.sample(range(SIZE), SIZE)) # non-in-place shuffle
-
-    for i in idxs:
-        if labels[i] == n:
-            return imgs[i] # return first match
-
-    # x, label = mnist.train.next_batch(1)
-    # while True:
-    #     x, label = mnist.train.next_batch(1)
-    #     if label == n:
-    #         break
-    # return x
+    return input_data.read_data_sets("./data/MNIST_data") # "./mnist_data"
 
 def all_plots(model, mnist):
     if model.architecture[-1] == 2: # only works for 2-D latent
@@ -61,8 +43,6 @@ def all_plots(model, mnist):
         plot_all_in_latent(model, mnist)
         print("Exploring latent...")
         plot.exploreLatent(model, nx=20, ny=20, range_=(-4, 4), outdir=PLOTS_DIR)
-        # plot.exploreLatent(model, nx=40, ny=40, ppf=True, name="explore_ppf",
-        #                    outdir=PLOTS_DIR)
         for n in (24, 30, 60, 100):
             plot.exploreLatent(model, nx=n, ny=n, ppf=True, outdir=PLOTS_DIR,
                                name="explore_ppf{}".format(n))
@@ -73,17 +53,13 @@ def all_plots(model, mnist):
     print("Plotting end-to-end reconstructions...")
     plot_all_end_to_end(model, mnist)
 
-    # print("Latent vector arithmetic...")
-    # ORIG, TARGET = "A", "X"
-    # from_font, to_font = fonts.train.random(2)
-    # chars = (to_font[CHAR2ORD[ORIG]], from_font[CHAR2ORD[ORIG]], from_font[CHAR2ORD[TARGET]])
-    # # chars[0] - chars[1] + chars[2]
-    # plot.latent_arithmetic(model, *[np.expand_dims(c, 0) for c in chars], name=
-    #                        "{}-{}+{}".format(ORIG, ORIG, TARGET), outdir=PLOTS_DIR)
+    print("Morphing...")
+    morph_numbers(model, mnist)
 
     # print("Plotting 10 MNIST digits...")
     # for i in range(10):
     #     plot.justMNIST(*mnist.train.next_batch(1), outdir=PLOTS_DIR)
+    #     plot.justMNIST(get_mnist(i), name=str(i), outdir=PLOTS_DIR)
 
 def plot_all_in_latent(model, mnist):
     names = ("train", "validation", "test")
@@ -135,9 +111,6 @@ def test_mnist(to_reload=None):
 
     #all_plots(v, mnist)
     # morph_numbers(v, mnist, [4,7,3,0,8,1,6,9,5,2])
-    for n in (24, 30, 60, 100):
-        plot.exploreLatent(v, nx=n, ny=n, ppf=True, outdir=PLOTS_DIR,
-                            name="explore_ppf{}".format(n))
 
 
 if __name__ == "__main__":
@@ -150,6 +123,5 @@ if __name__ == "__main__":
             pass
 
     # test_mnist()
-    # test_mnist(to_reload="./out/mnist/160801_1234_vae_784_500_500_50-20000")
     # test_mnist(to_reload="./out/mnist/160816_1754_vae_784_500_500_50-65536")
     test_mnist(to_reload="./out/mnist/160816_1813_vae_784_500_500_2-65536")

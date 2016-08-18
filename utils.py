@@ -1,5 +1,4 @@
 import functools
-import os
 
 from functional import compose, partial
 import tensorflow as tf
@@ -15,11 +14,29 @@ def composeAll(*args):
     return partial(functools.reduce, compose)(*args)
 
 def print_(var, name: str, first_n=5, summarize=5):
-    """Util for debugging by printing values during training"""
-    # tf.Print is identity fn with side-effect of printing requested [vals]
-    try:
+    """Util for debugging, by printing values of tf.Variable `var` during training"""
         return tf.Print(var, [var], '{}: '.format(name), first_n=first_n,
                         summarize=summarize)
-    except(TypeError):
+    except(TypeError): # variables are already in a list
         return tf.Print(var, var, '{}: '.format(name), first_n=first_n,
                         summarize=summarize)
+
+def get_mnist(n, mnist):
+    """Returns 784-D numpy array for random MNIST digit `n`"""
+    assert 0 <= n <= 9, "Must specify digit 0 - 9!"
+    import random
+
+    SIZE = 500
+    imgs, labels = mnist.train.next_batch(SIZE)
+    idxs = iter(random.sample(range(SIZE), SIZE)) # non-in-place shuffle
+
+    for i in idxs:
+        if labels[i] == n:
+            return imgs[i] # return first match
+
+    # x, label = mnist.train.next_batch(1)
+    # while True:
+    #     x, label = mnist.train.next_batch(1)
+    #     if label == n:
+    #         break
+    # return x

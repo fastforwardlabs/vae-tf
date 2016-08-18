@@ -75,14 +75,13 @@ class VAE():
         dropout = tf.placeholder_with_default(1., shape=[], name="dropout")
 
         # encoding / "recognition": q(z|x)
-        # approximation of true posterior p(z|x) -- intractable to calculate
         encoding = [Dense("encoding", hidden_size, dropout, self.nonlinearity)
                     # hidden layers reversed for function composition: outer -> inner
                     for hidden_size in reversed(self.architecture[1:-1])]
         h_encoded = composeAll(encoding)(x_in)
 
-        # latent distribution over z responsible for observed x, parameterized
-        # by hidden encoding: z ~ N(z_mean, np.exp(z_log_sigma)**2)
+        # latent distribution parameterized by hidden encoding
+        # z ~ N(z_mean, np.exp(z_log_sigma)**2)
         z_mean = Dense("z_mean", self.architecture[-1], dropout)(h_encoded)
         z_log_sigma = Dense("z_log_sigma", self.architecture[-1], dropout)(h_encoded)
         # kingma & welling: only 1 draw necessary as long as minibatch large enough (>100)
