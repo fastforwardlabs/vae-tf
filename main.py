@@ -18,29 +18,30 @@ ARCHITECTURE = [IMG_DIM**2, # 784 pixels
 
 HYPERPARAMS = {
     "batch_size": 128,
-    "learning_rate": 5E-4,#1E-3,
-    "dropout": 0.9,#0.8,
-    "lambda_l2_reg": 1E-5,#1E-4,
+    "learning_rate": 5E-4,
+    "dropout": 0.9,
+    "lambda_l2_reg": 1E-5,
     "nonlinearity": tf.nn.elu,
     "squashing": tf.nn.sigmoid,
 }
 
-MAX_ITER = 2**16#20000#1E5#20000
-MAX_EPOCHS = np.inf#100
+MAX_ITER = 2**16
+MAX_EPOCHS = np.inf
 
-LOG_DIR = "./log/mnist" # "./log"
-METAGRAPH_DIR = "./out/mnist" # "./out"
-PLOTS_DIR = "./png/mnist" # "./plots"
+LOG_DIR = "./log"
+METAGRAPH_DIR = "./out"
+PLOTS_DIR = "./png"
 
 
 def load_mnist():
     from tensorflow.examples.tutorials.mnist import input_data
-    return input_data.read_data_sets("./data/MNIST_data") # "./mnist_data"
+    return input_data.read_data_sets("./mnist_data")
 
 def all_plots(model, mnist):
     if model.architecture[-1] == 2: # only works for 2-D latent
         print("Plotting in latent space...")
         plot_all_in_latent(model, mnist)
+
         print("Exploring latent...")
         plot.exploreLatent(model, nx=20, ny=20, range_=(-4, 4), outdir=PLOTS_DIR)
         for n in (24, 30, 60, 100):
@@ -54,12 +55,11 @@ def all_plots(model, mnist):
     plot_all_end_to_end(model, mnist)
 
     print("Morphing...")
-    morph_numbers(model, mnist)
+    morph_numbers(model, mnist, ns=[9,8,7,6,5,4,3,2,1,0])
 
-    # print("Plotting 10 MNIST digits...")
-    # for i in range(10):
-    #     plot.justMNIST(*mnist.train.next_batch(1), outdir=PLOTS_DIR)
-    #     plot.justMNIST(get_mnist(i), name=str(i), outdir=PLOTS_DIR)
+    print("Plotting 10 MNIST digits...")
+    for i in range(10):
+        plot.justMNIST(get_mnist(i), name=str(i), outdir=PLOTS_DIR)
 
 def plot_all_in_latent(model, mnist):
     names = ("train", "validation", "test")
@@ -84,33 +84,31 @@ def plot_all_end_to_end(model, mnist):
         plot.plotSubset(model, x, x_reconstructed, n=10, name=name,
                         outdir=PLOTS_DIR)
 
-def morph_numbers(model, mnist, ns=None):
+def morph_numbers(model, mnist, ns=None, n_per_morph=10):
     if not ns:
         import random
         ns = random.sample(range(10), 10) # non-in-place shuffle
 
     xs = np.squeeze([get_mnist(n, mnist) for n in ns])
     mus, _ = model.encode(xs)
-    plot.morph(model, mus, n_per_morph=10, outdir=PLOTS_DIR,
+    plot.morph(model, mus, n_per_morph=n_per_morph, outdir=PLOTS_DIR,
                name="morph_{}".format("".join(str(n) for n in ns)))
 
-def test_mnist(to_reload=None):
+def main(to_reload=None):
     mnist = load_mnist()
 
-    if to_reload:
+    if to_reload: # restore
         v = vae.VAE(ARCHITECTURE, HYPERPARAMS, meta_graph=to_reload)
         print("Loaded!")
 
-    else:
+    else: # train
         v = vae.VAE(ARCHITECTURE, HYPERPARAMS, log_dir=LOG_DIR)
         v.train(mnist, max_iter=MAX_ITER, max_epochs=MAX_EPOCHS, cross_validate=False,
-                verbose=False,#True,
-                save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR,
-                plot_latent_over_time=True)
+                verbose=True, save=True, outdir=METAGRAPH_DIR, plots_outdir=PLOTS_DIR,
+                plot_latent_over_time=False)
         print("Trained!")
 
-    #all_plots(v, mnist)
-    # morph_numbers(v, mnist, [4,7,3,0,8,1,6,9,5,2])
+    all_plots(v, mnist)
 
 
 if __name__ == "__main__":
@@ -123,5 +121,5 @@ if __name__ == "__main__":
             pass
 
     # test_mnist()
-    # test_mnist(to_reload="./out/mnist/160816_1754_vae_784_500_500_50-65536")
-    test_mnist(to_reload="./out/mnist/160816_1813_vae_784_500_500_2-65536")
+    # test_mnist(to_reload="./out/160816_1754_vae_784_500_500_50-65536")
+    test_mnist(to_reload="./out/160805_1646_vae_784_500_500_2-131072")
