@@ -1,5 +1,5 @@
 # vae-ry exciting vae code
-For all your TensorFlow Variational Autoencoder needs.
+For all your (TensorFlow) Variational Autoencoder needs.
 
 ## Description
 
