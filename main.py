@@ -1,4 +1,5 @@
 import os
+import sys
 
 import numpy as np
 import tensorflow as tf
@@ -25,7 +26,7 @@ HYPERPARAMS = {
     "squashing": tf.nn.sigmoid
 }
 
-MAX_ITER = 2**16
+MAX_ITER = 2000#2**16
 MAX_EPOCHS = np.inf
 
 LOG_DIR = "./log"
@@ -59,7 +60,7 @@ def all_plots(model, mnist):
 
     print("Plotting 10 MNIST digits...")
     for i in range(10):
-        plot.justMNIST(get_mnist(i), name=str(i), outdir=PLOTS_DIR)
+        plot.justMNIST(get_mnist(i, mnist), name=str(i), outdir=PLOTS_DIR)
 
 def plot_all_in_latent(model, mnist):
     names = ("train", "validation", "test")
@@ -120,6 +121,8 @@ if __name__ == "__main__":
         except(FileExistsError):
             pass
 
-    # test_mnist()
-    # test_mnist(to_reload="./out/160816_1754_vae_784_500_500_50-65536")
-    test_mnist(to_reload="./out/160805_1646_vae_784_500_500_2-131072")
+    try:
+        to_reload = sys.argv[1]
+        main(to_reload=to_reload)
+    except(IndexError):
+        main()
