@@ -1,5 +1,5 @@
 # vae-ry exciting vae code
-For all your (TensorFlow) Variational Autoencoder needs.
+For all your TensorFlow Variational Autoencoder needs.
 
 ## Description
 
@@ -13,7 +13,7 @@ Start there, then check out the repo!
 ## Usage:
 
 To train a new model, edit `main.py` with your desired VAE `ARCHITECTURE`,
-`HYPERPARAMETERS`, and paths/to/outdirs.
+`HYPERPARAMETERS`, and `paths/to/outdirs`.
 
 Then, simply:
 
