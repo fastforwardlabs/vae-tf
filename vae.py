@@ -27,7 +27,7 @@ class VAE():
     }
     RESTORE_KEY = "to_restore"
 
-    def __init__(self, architecture, d_hyperparams={}, meta_graph=None,
+    def __init__(self, architecture=[], d_hyperparams={}, meta_graph=None,
                  save_graph_def=True, log_dir="./log"):
         """(Re)build a symmetric VAE model with given:
 
@@ -43,6 +43,9 @@ class VAE():
 
         if not meta_graph: # new model
             self.datetime = datetime.now().strftime(r"%y%m%d_%H%M")
+            assert len(self.architecture) > 2, \
+                "Architecture must have more layers! (input, 1+ hidden, latent)"
+
             # build graph
             handles = self._buildGraph()
             for handle in handles:
@@ -50,11 +53,11 @@ class VAE():
             self.sesh.run(tf.initialize_all_variables())
 
         else: # restore saved model
-            datetime, name = os.path.basename(meta_graph).split("_vae_")
-            self.datetime = "{}_reloaded".format(datetime)
-            *model_architecture, _ = re.split("_|-", name)
-            assert [int(n) for n in model_architecture] == self.architecture, \
-                "Architecture must match saved model!"
+            model_datetime, model_name = os.path.basename(meta_graph).split("_vae_")
+            self.datetime = "{}_reloaded".format(model_datetime)
+            *model_architecture, _ = re.split("_|-", model_name)
+            self.architecture = [int(n) for n in model_architecture]
+
             # rebuild graph
             meta_graph = os.path.abspath(meta_graph)
             tf.train.import_meta_graph(meta_graph + ".meta").restore(
