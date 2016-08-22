@@ -8,7 +8,7 @@ from [Fast Forward Labs](http://www.fastforwardlabs.com).
 Start there, then check out the repo!
 
 * [Part I: Introducing Variational Autoencoders (in Prose and Code)](http://blog.fastforwardlabs.com/post/148842796218/introducing-variational-autoencoders-in-prose-and)
-* [Part II: Under the Hood of the Variational Autoencoder (in Prose and Code)](TODO)
+* [Part II: Under the Hood of the Variational Autoencoder (in Prose and Code)](http://blog.fastforwardlabs.com/post/149329060653/under-the-hood-of-the-variational-autoencoder-in)
 
 ## Usage:
 
