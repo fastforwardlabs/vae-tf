@@ -104,13 +104,6 @@ class VAE():
             "x_decoding", self.architecture[0], dropout, self.squashing))
         x_reconstructed = tf.identity(composeAll(decoding)(z), name="x_reconstructed")
 
-        # ops to directly explore latent space
-        # defaults to prior z ~ N(0, I)
-        z_ = tf.placeholder_with_default(tf.random_normal([1, self.architecture[-1]]),
-                                         shape=[None, self.architecture[-1]],
-                                         name="latent_in")
-        x_reconstructed_ = composeAll(decoding)(z_)
-
         # reconstruction loss: mismatch b/w x & x_reconstructed
         # binary cross-entropy -- assumes x & p(x|z) are iid Bernoullis
         rec_loss = VAE.crossEntropy(x_reconstructed, x_in)
