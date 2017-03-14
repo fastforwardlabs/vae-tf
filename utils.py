@@ -8,7 +8,7 @@ def composeAll(*args):
     """Util for multiple function composition
 
     i.e. composed = composeAll([f, g, h])
-         composed(x) # == f(g(h(x)))
+         composed(x) == f(g(h(x)))
     """
     # adapted from https://docs.python.org/3.1/howto/functional.html
     return partial(functools.reduce, compose)(*args)
