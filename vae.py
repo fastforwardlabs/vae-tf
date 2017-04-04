@@ -50,7 +50,7 @@ class VAE():
             handles = self._buildGraph()
             for handle in handles:
                 tf.add_to_collection(VAE.RESTORE_KEY, handle)
-            self.sesh.run(tf.initialize_all_variables())
+            self.sesh.run(tf.global_variables_initializer())
 
         else: # restore saved model
             model_datetime, model_name = os.path.basename(meta_graph).split("_vae_")
@@ -70,7 +70,7 @@ class VAE():
          self.cost, self.global_step, self.train_op) = handles
 
         if save_graph_def: # tensorboard
-            self.logger = tf.train.SummaryWriter(log_dir, self.sesh.graph)
+            self.logger = tf.summary.FileWriter(log_dir, self.sesh.graph)
 
     @property
     def step(self):
@@ -213,7 +213,7 @@ class VAE():
               verbose=True, save=True, outdir="./out", plots_outdir="./png",
               plot_latent_over_time=False):
         if save:
-            saver = tf.train.Saver(tf.all_variables())
+            saver = tf.train.Saver(tf.global_variables())
 
         try:
             err_train = 0
